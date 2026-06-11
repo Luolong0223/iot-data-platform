@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}数据查看 - IoT Data Platform{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-table"></i> 数据查看</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" onclick="exportData('csv')">
+                <i class="bi bi-download"></i> 导出 CSV
+            </button>
+            <button class="btn btn-outline-success" onclick="exportData('json')">
+                <i class="bi bi-download"></i> 导出 JSON
+            </button>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">设备</label>
+                    <select class="form-select" id="filterDevice">
+                        <option value="">全部设备</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">通道</label>
+                    <select class="form-select" id="filterChannel">
+                        <option value="">全部通道</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">数据点</label>
+                    <input type="text" class="form-control" id="filterPoint" placeholder="如 Data-1, P1">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="applyFilters()">
+                        <i class="bi bi-funnel"></i> 筛选
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover" id="dataTable" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>时间</th>
+                            <th>设备</th>
+                            <th>通道</th>
+                            <th>数据点</th>
+                            <th>数值</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script>
+(function() {
+    let dataTable = null;
+
+    function loadFilters() {
+        apiRequest('/api/devices').then(function(data) {
+            const deviceSelect = document.getElementById('filterDevice');
+            const devices = data.devices || [];
+            deviceSelect.innerHTML = '<option value="">全部设备</option>' +
+                devices.map(function(d) {
+                    return '<option value="' + d.id + '">' + d.name + '</option>';
+                }).join('');
+
+            deviceSelect.addEventListener('change', function() {
+                const devId = parseInt(this.value);
+                const channelSelect = document.getElementById('filterChannel');
+                if (!devId) {
+                    channelSelect.innerHTML = '<option value="">全部通道</option>';
+                    return;
+                }
+                const dev = devices.find(function(x) { return x.id === devId; });
+                const channels = dev && dev.channels ? dev.channels : [];
+                channelSelect.innerHTML = '<option value="">全部通道</option>' +
+                    channels.map(function(c) {
+                        return '<option value="' + c.id + '">' + c.name + '</option>';
+                    }).join('');
+            });
+        }).catch(function() {});
+    }
+
+    window.applyFilters = function() {
+        if (dataTable) dataTable.ajax.reload();
+    };
+
+    window.exportData = function(format) {
+        const device = document.getElementById('filterDevice').value;
+        const channel = document.getElementById('filterChannel').value;
+        const point = document.getElementById('filterPoint').value;
+        const params = new URLSearchParams();
+        if (device) params.append('device_id', device);
+        if (channel) params.append('channel_id', channel);
+        if (point) params.append('point_name', point);
+        params.append('format', format);
+        params.append('export', '1');
+        window.open('/api/data/history?' + params.toString(), '_blank');
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadFilters();
+        dataTable = $('#dataTable').DataTable({
+            processing: true,
+            serverSide: false,
+            ajax: {
+                url: '/api/data/history',
+                data: function(d) {
+                    d.device_id = document.getElementById('filterDevice').value;
+                    d.channel_id = document.getElementById('filterChannel').value;
+                    d.point_name = document.getElementById('filterPoint').value;
+                },
+                dataSrc: 'data'
+            },
+            columns: [
+                { data: 'id' },
+                { data: 'timestamp', render: function(data) { return formatDateTime(data); } },
+                { data: 'device_name' },
+                { data: 'channel_name' },
+                { data: 'name' },
+                { data: 'value', render: function(data) { return formatNumber(data, 4); } },
+                { data: null, orderable: false, render: function(data) {
+                    return '<a href="/data/chart/' + data.channel_id + '/' + encodeURIComponent(data.name) + '" class="btn btn-sm btn-outline-primary" title="图表"><i class="bi bi-graph-up"></i></a>';
+                }}
+            ],
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/zh.json'
+            },
+            order: [[1, 'desc']],
+            pageLength: 25
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}系统设置{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-gear"></i> 系统设置</h4>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-hdd-network"></i> TCP 服务器配置
+                </div>
+                <div class="card-body">
+                    <form id="tcpConfigForm">
+                        <div class="mb-3">
+                            <label class="form-label">监听主机</label>
+                            <input type="text" class="form-control" id="tcpHost" value="0.0.0.0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">基础端口</label>
+                            <input type="number" class="form-control" id="tcpBasePortInput" value="9000">
+                            <div class="form-text">用户端口 = 基础端口 + 用户ID</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">缓冲区大小 (字节)</label>
+                            <input type="number" class="form-control" id="tcpBuffer" value="4096">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">超时时间 (秒)</label>
+                            <input type="number" class="form-control" id="tcpTimeout" value="30">
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="saveTcpConfig()">
+                            <i class="bi bi-check-lg"></i> 保存 TCP 配置
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-shield-lock"></i> 安全设置
+                </div>
+                <div class="card-body">
+                    <form id="securityForm">
+                        <div class="mb-3">
+                            <label class="form-label">会话有效期 (小时)</label>
+                            <input type="number" class="form-control" id="sessionLifetime" value="24">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">最大上传大小 (MB)</label>
+                            <input type="number" class="form-control" id="maxUploadSize" value="16">
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="saveSecurityConfig()">
+                            <i class="bi bi-check-lg"></i> 保存安全设置
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <i class="bi bi-info-circle"></i> 系统信息
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>平台版本</span>
+                            <span class="text-muted">v1.0.0</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Python 版本</span>
+                            <span class="text-muted">3.9+</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>数据库</span>
+                            <span class="text-muted">SQLite / MySQL</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>前端框架</span>
+                            <span class="text-muted">Bootstrap 5</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+<script>
+(function() {
+    function loadSystemConfig() {
+        apiRequest('/api/tcp/config').then(function(data) {
+            const cfg = data.config || {};
+            if (cfg.tcp_host !== undefined) document.getElementById('tcpHost').value = cfg.tcp_host;
+            if (cfg.tcp_base_port !== undefined) document.getElementById('tcpBasePortInput').value = cfg.tcp_base_port;
+            if (cfg.tcp_buffer_size !== undefined) document.getElementById('tcpBuffer').value = cfg.tcp_buffer_size;
+            if (cfg.tcp_timeout !== undefined) document.getElementById('tcpTimeout').value = cfg.tcp_timeout;
+            if (cfg.session_lifetime !== undefined) document.getElementById('sessionLifetime').value = cfg.session_lifetime;
+            if (cfg.max_upload_size !== undefined) document.getElementById('maxUploadSize').value = cfg.max_upload_size;
+        }).catch(function(err) {
+            showToast('加载配置失败: ' + err.message, 'error');
+        });
+    }
+
+    window.saveTcpConfig = function() {
+        const payload = {
+            tcp_host: document.getElementById('tcpHost').value,
+            tcp_base_port: parseInt(document.getElementById('tcpBasePortInput').value),
+            tcp_buffer_size: parseInt(document.getElementById('tcpBuffer').value),
+            tcp_timeout: parseInt(document.getElementById('tcpTimeout').value)
+        };
+        apiRequest('/api/tcp/config', { method: 'PUT', body: payload }).then(function() {
+            showToast('TCP 配置已保存', 'success');
+        }).catch(function(err) {
+            showToast(err.message, 'error');
+        });
+    };
+
+    window.saveSecurityConfig = function() {
+        const payload = {
+            session_lifetime: parseInt(document.getElementById('sessionLifetime').value),
+            max_upload_size: parseInt(document.getElementById('maxUploadSize').value)
+        };
+        apiRequest('/api/tcp/config', { method: 'PUT', body: payload }).then(function() {
+            showToast('安全设置已保存', 'success');
+        }).catch(function(err) {
+            showToast(err.message, 'error');
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', loadSystemConfig);
+})();
+</script>
+{% endblock %}

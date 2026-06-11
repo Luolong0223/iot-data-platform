@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}设备管理 - IoT Data Platform{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-hdd-rack"></i> 设备管理</h4>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#deviceModal" onclick="resetDeviceForm()">
+            <i class="bi bi-plus-lg"></i> 添加设备
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle" id="devicesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>设备名称</th>
+                            <th>电压 (mV)</th>
+                            <th>位置</th>
+                            <th>通道数</th>
+                            <th>创建时间</th>
+                            <th class="text-end">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="devicesTableBody">
+                        <tr><td colspan="7" class="text-center text-muted py-4">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Device Modal -->
+<div class="modal fade" id="deviceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deviceModalTitle">添加设备</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="deviceForm">
+                    <input type="hidden" id="deviceId">
+                    <div class="mb-3">
+                        <label for="deviceName" class="form-label">设备名称</label>
+                        <input type="text" class="form-control" id="deviceName" required placeholder="如 Collector-1">
+                    </div>
+                    <div class="mb-3">
+                        <label for="deviceVoltage" class="form-label">电压 (mV)</label>
+                        <input type="number" class="form-control" id="deviceVoltage" placeholder="如 3037">
+                    </div>
+                    <div class="mb-3">
+                        <label for="deviceLocation" class="form-label">位置描述</label>
+                        <input type="text" class="form-control" id="deviceLocation" placeholder="如 实验室A">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveDeviceBtn" onclick="saveDevice()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Location Modal -->
+<div class="modal fade" id="locationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">设置设备位置</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="locationMap" style="height: 400px; border-radius: 0.5rem;"></div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label class="form-label">纬度</label>
+                        <input type="number" step="any" class="form-control" id="locLat" readonly>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">经度</label>
+                        <input type="number" step="any" class="form-control" id="locLng" readonly>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveLocationBtn" onclick="saveLocation()">保存位置</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<script>
+(function() {
+    let devices = [];
+    let locationMap = null;
+    let locationMarker = null;
+    let currentLocDeviceId = null;
+
+    window.resetDeviceForm = function() {
+        document.getElementById('deviceId').value = '';
+        document.getElementById('deviceName').value = '';
+        document.getElementById('deviceVoltage').value = '';
+        document.getElementById('deviceLocation').value = '';
+        document.getElementById('deviceModalTitle').textContent = '添加设备';
+    };
+
+    function loadDevices() {
+        apiRequest('/api/devices').then(function(data) {
+            devices = data.devices || [];
+            const tbody = document.getElementById('devicesTableBody');
+            if (!devices.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">暂无设备</td></tr>';
+                return;
+            }
+            tbody.innerHTML = devices.map(function(d) {
+                return '<tr>' +
+                    '<td>' + d.id + '</td>' +
+                    '<td><strong>' + (d.name || '-') + '</strong></td>' +
+                    '<td>' + (d.voltage_mv || '-') + '</td>' +
+                    '<td>' + (d.location_name || '-') + '<br><small class="text-muted">' +
+                        (d.latitude ? d.latitude.toFixed(4) + ', ' + d.longitude.toFixed(4) : '未设置') + '</small></td>' +
+                    '<td>' + (d.channels ? d.channels.length : 0) + '</td>' +
+                    '<td>' + formatDateTime(d.created_at) + '</td>' +
+                    '<td class="text-end">' +
+                        '<button class="btn btn-sm btn-outline-primary me-1" onclick="editDevice(' + d.id + ')" title="编辑"><i class="bi bi-pencil"></i></button>' +
+                        '<button class="btn btn-sm btn-outline-success me-1" onclick="openLocationModal(' + d.id + ')" title="位置"><i class="bi bi-geo-alt"></i></button>' +
+                        '<button class="btn btn-sm btn-outline-danger" onclick="deleteDevice(' + d.id + ')" title="删除"><i class="bi bi-trash"></i></button>' +
+                    '</td>' +
+                '</tr>';
+            }).join('');
+        }).catch(function(err) {
+            showToast('加载设备失败: ' + err.message, 'error');
+        });
+    }
+
+    window.editDevice = function(id) {
+        const d = devices.find(function(x) { return x.id === id; });
+        if (!d) return;
+        document.getElementById('deviceId').value = d.id;
+        document.getElementById('deviceName').value = d.name || '';
+        document.getElementById('deviceVoltage').value = d.voltage_mv || '';
+        document.getElementById('deviceLocation').value = d.location_name || '';
+        document.getElementById('deviceModalTitle').textContent = '编辑设备';
+        new bootstrap.Modal(document.getElementById('deviceModal')).show();
+    };
+
+    window.saveDevice = function() {
+        const id = document.getElementById('deviceId').value;
+        const payload = {
+            name: document.getElementById('deviceName').value,
+            voltage_mv: parseInt(document.getElementById('deviceVoltage').value) || null,
+            location_name: document.getElementById('deviceLocation').value
+        };
+        const url = id ? '/api/devices/' + id : '/api/devices';
+        const method = id ? 'PUT' : 'POST';
+        apiRequest(url, { method: method, body: payload }).then(function() {
+            bootstrap.Modal.getInstance(document.getElementById('deviceModal')).hide();
+            showToast(id ? '设备已更新' : '设备已添加', 'success');
+            loadDevices();
+        }).catch(function(err) {
+            showToast(err.message, 'error');
+        });
+    };
+
+    window.deleteDevice = function(id) {
+        confirmDelete('确定要删除此设备吗？相关数据也将被删除。', function() {
+            apiRequest('/api/devices/' + id, { method: 'DELETE' }).then(function() {
+                showToast('设备已删除', 'success');
+                loadDevices();
+            }).catch(function(err) {
+                showToast(err.message, 'error');
+            });
+        });
+    };
+
+    window.openLocationModal = function(id) {
+        currentLocDeviceId = id;
+        const d = devices.find(function(x) { return x.id === id; });
+        const lat = d && d.latitude ? d.latitude : 26.5933;
+        const lng = d && d.longitude ? d.longitude : 106.7135;
+        document.getElementById('locLat').value = lat;
+        document.getElementById('locLng').value = lng;
+
+        const modalEl = document.getElementById('locationModal');
+        modalEl.addEventListener('shown.bs.modal', function initMap() {
+            modalEl.removeEventListener('shown.bs.modal', initMap);
+            if (!locationMap) {
+                locationMap = L.map('locationMap').setView([lat, lng], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(locationMap);
+            } else {
+                locationMap.setView([lat, lng], 13);
+            }
+            if (locationMarker) locationMap.removeLayer(locationMarker);
+            locationMarker = L.marker([lat, lng], { draggable: true }).addTo(locationMap);
+            locationMarker.on('dragend', function(e) {
+                const pos = e.target.getLatLng();
+                document.getElementById('locLat').value = pos.lat.toFixed(6);
+                document.getElementById('locLng').value = pos.lng.toFixed(6);
+            });
+            locationMap.on('click', function(e) {
+                locationMarker.setLatLng(e.latlng);
+                document.getElementById('locLat').value = e.latlng.lat.toFixed(6);
+                document.getElementById('locLng').value = e.latlng.lng.toFixed(6);
+            });
+            setTimeout(function() { locationMap.invalidateSize(); }, 100);
+        });
+        new bootstrap.Modal(modalEl).show();
+    };
+
+    window.saveLocation = function() {
+        if (!currentLocDeviceId) return;
+        const payload = {
+            latitude: parseFloat(document.getElementById('locLat').value),
+            longitude: parseFloat(document.getElementById('locLng').value)
+        };
+        apiRequest('/api/devices/' + currentLocDeviceId + '/location', { method: 'POST', body: payload }).then(function() {
+            bootstrap.Modal.getInstance(document.getElementById('locationModal')).hide();
+            showToast('位置已更新', 'success');
+            loadDevices();
+        }).catch(function(err) {
+            showToast(err.message, 'error');
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', loadDevices);
+})();
+</script>
+{% endblock %}

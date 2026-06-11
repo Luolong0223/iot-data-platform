@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}个人设置 - IoT Data Platform{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0"><i class="bi bi-person-gear"></i> 个人设置</h4>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-person"></i> 基本信息
+                </div>
+                <div class="card-body">
+                    <form id="profileForm">
+                        <div class="mb-3">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" value="{{ current_user.username }}" disabled>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">用户类型</label>
+                            <input type="text" class="form-control" value="{{ '管理员' if current_user.is_admin else '普通用户' }}" disabled>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">注册时间</label>
+                            <input type="text" class="form-control" value="{{ current_user.created_at }}" disabled>
+                        </div>
+                        <hr>
+                        <div class="mb-3">
+                            <label for="newPassword" class="form-label">新密码</label>
+                            <input type="password" class="form-control" id="newPassword" placeholder="留空则不修改">
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">确认新密码</label>
+                            <input type="password" class="form-control" id="confirmPassword" placeholder="再次输入新密码">
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="saveProfile()">
+                            <i class="bi bi-check-lg"></i> 保存修改
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-ethernet"></i> TCP 接收配置
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">TCP 接收端口</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-plug"></i></span>
+                            <input type="text" class="form-control" id="tcpPort" value="{{ current_user.tcp_port or '未分配' }}" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('tcpPort')">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">此端口用于接收设备 TCP 透传数据</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">服务器地址</label>
+                        <input type="text" class="form-control" value="{{ request.host.split(':')[0] }}" readonly>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 设备发送 JSON 数据到 <strong>{{ request.host.split(':')[0] }}:{{ current_user.tcp_port }}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <i class="bi bi-database-gear"></i> 存储设置
+                </div>
+                <div class="card-body">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="storageEnabled" {% if current_user.storage_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="storageEnabled">启用数据存储</label>
+                    </div>
+                    <div class="form-text">关闭后接收到的数据将不被保存到数据库</div>
+                    <button type="button" class="btn btn-primary mt-3" onclick="saveStorageSettings()">
+                        <i class="bi bi-check-lg"></i> 保存存储设置
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    window.saveProfile = function() {
+        const pw = document.getElementById('newPassword').value;
+        const cpw = document.getElementById('confirmPassword').value;
+        if (pw && pw !== cpw) {
+            showToast('两次输入的密码不一致', 'error');
+            return;
+        }
+        const payload = {};
+        if (pw) payload.password = pw;
+        apiRequest('/api/auth/me', { method: 'PUT', body: payload }).then(function() {
+            showToast('资料已更新', 'success');
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        }).catch(function(err) {
+            showToast(err.message, 'error');
+        });
+    };
+
+    window.saveStorageSettings = function() {
+        const enabled = document.getElementById('storageEnabled').checked;
+        apiRequest('/api/tcp/config', { method: 'PUT', body: { storage_enabled: enabled } }).then(function() {
+            showToast('存储设置已保存', 'success');
+        }).catch(function(err) {
+            showToast(err.message, 'error');
+        });
+    };
+
+    window.copyToClipboard = function(elementId) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            navigator.clipboard.writeText(el.value).then(function() {
+                showToast('已复制到剪贴板', 'success');
+            });
+        }
+    };
+})();
+</script>
+{% endblock %}
