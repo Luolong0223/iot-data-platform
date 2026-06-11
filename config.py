@@ -9,7 +9,7 @@ class Config:
     
     # TCP Server Config
     TCP_HOST = os.environ.get('TCP_HOST') or '0.0.0.0'
-    TCP_BASE_PORT = int(os.environ.get('TCP_BASE_PORT') or 9000)
+    TCP_BASE_PORT = int(os.environ.get('TCP_BASE_PORT') or 9105)
     TCP_BUFFER_SIZE = 4096
     TCP_TIMEOUT = 30
     

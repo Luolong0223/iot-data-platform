@@ -59,7 +59,7 @@ def create_default_admin():
         admin = User(
             username=admin_username,
             is_admin=True,
-            tcp_port=9000,
+            tcp_port=9105,
             storage_enabled=True
         )
         admin.set_password(admin_password)

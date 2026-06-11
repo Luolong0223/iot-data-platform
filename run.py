@@ -18,4 +18,4 @@ if __name__ == '__main__':
     start_tcp_server()
     
     # 启动Flask Web服务（禁用reloader避免TCP重复启动）
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=9100, debug=True, use_reloader=False)
