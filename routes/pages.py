@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app
 from flask_login import login_required, current_user, login_user, logout_user
 
 from models.database import User
@@ -61,13 +61,19 @@ def data_view():
 @pages_bp.route('/map')
 @login_required
 def map_view():
-    return render_template('map.html')
+    return render_template('map.html', baidu_map_ak=current_app.config.get('BAIDU_MAP_AK', ''))
 
 
 @pages_bp.route('/profile')
 @login_required
 def profile():
     return render_template('profile.html')
+
+
+@pages_bp.route('/alarms')
+@login_required
+def alarms():
+    return render_template('alarms.html')
 
 
 @pages_bp.route('/admin')

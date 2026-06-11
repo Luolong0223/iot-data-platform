@@ -1,6 +1,6 @@
 /**
- * IoT Data Platform - Map JavaScript
- * Leaflet map initialization, device markers, popup content
+ * IoT Data Platform - Map JavaScript (Baidu Map)
+ * Baidu Map API v3.0 integration, device markers, info windows
  */
 
 (function() {
@@ -8,18 +8,20 @@
 
     let map = null;
     let markers = [];
-    let markerLayer = null;
 
-    window.initMap = function(elementId, lat, lng, zoom) {
+    // Initialize Baidu Map
+    window.initBaiduMap = function(elementId, lng, lat, zoom) {
         if (map) return;
-        map = L.map(elementId).setView([lat, lng], zoom);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19
-        }).addTo(map);
-        markerLayer = L.layerGroup().addTo(map);
+        map = new BMap.Map(elementId);
+        const point = new BMap.Point(lng, lat);
+        map.centerAndZoom(point, zoom);
+        map.enableScrollWheelZoom(true);
+        map.addControl(new BMap.NavigationControl());
+        map.addControl(new BMap.ScaleControl());
+        map.addControl(new BMap.OverviewMapControl());
     };
 
+    // Load device markers from API
     window.loadDeviceMarkers = function() {
         apiRequest('/api/devices').then(function(data) {
             const devices = data.devices || [];
@@ -38,36 +40,54 @@
     };
 
     function addDeviceMarker(device) {
-        const onlineCount = device.channels ? device.channels.filter(function(c) { return c.online; }).length : 0;
-        const totalChannels = device.channels ? device.channels.length : 0;
-        const color = totalChannels > 0 && onlineCount === totalChannels ? '#27ae60' :
-                      onlineCount > 0 ? '#f39c12' : '#e74c3c';
+        const channels = device.channels || [];
+        const onlineCount = channels.filter(function(c) { return c.online; }).length;
+        const totalChannels = channels.length;
 
-        const icon = L.divIcon({
-            className: 'custom-marker',
-            html: '<div style="background-color:' + color + ';width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
-            iconSize: [16, 16],
-            iconAnchor: [8, 8]
-        });
+        // Determine marker color based on status
+        let color = '#e74c3c';
+        if (totalChannels > 0 && onlineCount === totalChannels) {
+            color = '#27ae60';
+        } else if (onlineCount > 0) {
+            color = '#f39c12';
+        }
 
-        const marker = L.marker([device.latitude, device.longitude], { icon: icon }).addTo(markerLayer);
+        const point = new BMap.Point(device.longitude, device.latitude);
+
+        // Create custom icon using SimpleMarker (or fallback to standard marker with label)
+        let marker;
+        try {
+            const icon = new BMap.Icon(
+                'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="' + color + '" stroke="white" stroke-width="2"/></svg>'),
+                new BMap.Size(24, 24)
+            );
+            marker = new BMap.Marker(point, { icon: icon });
+        } catch (e) {
+            marker = new BMap.Marker(point);
+        }
+
         marker.deviceId = device.id;
+        map.addOverlay(marker);
+        markers.push(marker);
 
-        const popupContent = buildPopupContent(device, onlineCount, totalChannels);
-        marker.bindPopup(popupContent, { maxWidth: 320 });
-
-        marker.on('click', function() {
-            loadLatestDataForPopup(device.id, marker);
+        // Build info window content
+        const infoContent = buildInfoWindowContent(device, onlineCount, totalChannels);
+        const infoWindow = new BMap.InfoWindow(infoContent, {
+            width: 320,
+            title: '<strong>' + (device.name || '未命名设备') + '</strong>',
+            enableMessage: false
         });
 
-        markers.push(marker);
+        marker.addEventListener('click', function() {
+            map.openInfoWindow(infoWindow, point);
+            loadLatestDataForInfoWindow(device.id, infoWindow);
+        });
     }
 
-    function buildPopupContent(device, onlineCount, totalChannels) {
-        let html = '<div class="map-popup">' +
-            '<div class="popup-title">' + (device.name || '未命名设备') + '</div>' +
+    function buildInfoWindowContent(device, onlineCount, totalChannels) {
+        return '<div class="map-popup">' +
             '<div class="popup-data">' +
-                '<div><span class="label">ID:</span> ' + device.id + '</div>' +
+                '<div><span class="label">ID:</span> ' + (device.id || '-') + '</div>' +
                 '<div><span class="label">电压:</span> ' + (device.voltage_mv || '-') + ' mV</div>' +
                 '<div><span class="label">位置:</span> ' + (device.location_name || '-') + '</div>' +
                 '<div><span class="label">通道:</span> ' + onlineCount + '/' + totalChannels + ' 在线</div>' +
@@ -75,54 +95,55 @@
                 '<div id="popup-data-' + device.id + '"><em>点击加载最新数据...</em></div>' +
             '</div>' +
         '</div>';
-        return html;
     }
 
-    function loadLatestDataForPopup(deviceId, marker) {
+    function loadLatestDataForInfoWindow(deviceId, infoWindow) {
         apiRequest('/api/data/latest?device_id=' + deviceId).then(function(data) {
-            const container = document.getElementById('popup-data-' + deviceId);
-            if (!container) return;
             const points = data.data_points || [];
+            let html;
             if (!points.length) {
-                container.innerHTML = '<em>暂无数据</em>';
-                return;
+                html = '<em>暂无数据</em>';
+            } else {
+                html = '<table style="font-size:0.8rem;width:100%;">';
+                html += '<tr><th>数据点</th><th>数值</th><th>时间</th></tr>';
+                points.slice(0, 5).forEach(function(p) {
+                    html += '<tr>' +
+                        '<td>' + (p.name || '-') + '</td>' +
+                        '<td>' + formatNumber(p.value, 4) + '</td>' +
+                        '<td>' + formatDateTime(p.timestamp) + '</td>' +
+                    '</tr>';
+                });
+                html += '</table>';
             }
-            let html = '<table style="font-size:0.8rem;width:100%;">';
-            html += '<tr><th>数据点</th><th>数值</th><th>时间</th></tr>';
-            points.slice(0, 5).forEach(function(p) {
-                html += '<tr>' +
-                    '<td>' + p.name + '</td>' +
-                    '<td>' + formatNumber(p.value, 4) + '</td>' +
-                    '<td>' + formatDateTime(p.timestamp) + '</td>' +
-                '</tr>';
-            });
-            html += '</table>';
-            container.innerHTML = html;
-            marker.setPopupContent(marker.getPopup().getContent().replace(
-                /<div id="popup-data-[^"]*">.*?<\/div>/,
-                '<div id="popup-data-' + deviceId + '">' + html + '</div>'
-            ));
+            // Update the info window content by rebuilding
+            const contentDiv = document.getElementById('popup-data-' + deviceId);
+            if (contentDiv) {
+                contentDiv.innerHTML = html;
+            }
         }).catch(function() {
-            const container = document.getElementById('popup-data-' + deviceId);
-            if (container) container.innerHTML = '<em>加载失败</em>';
+            const contentDiv = document.getElementById('popup-data-' + deviceId);
+            if (contentDiv) {
+                contentDiv.innerHTML = '<em>加载失败</em>';
+            }
         });
     }
 
     function clearMarkers() {
-        if (markerLayer) {
-            markerLayer.clearLayers();
-        }
+        markers.forEach(function(marker) {
+            map.removeOverlay(marker);
+        });
         markers = [];
     }
 
     window.fitAllMarkers = function() {
         if (!map || markers.length === 0) return;
         if (markers.length === 1) {
-            map.setView(markers[0].getLatLng(), 14);
+            map.centerAndZoom(markers[0].getPosition(), 14);
             return;
         }
-        const group = new L.featureGroup(markers);
-        map.fitBounds(group.getBounds().pad(0.2));
+        const points = markers.map(function(m) { return m.getPosition(); });
+        const view = map.getViewport(points);
+        map.centerAndZoom(view.center, view.zoom);
     };
 
     window.refreshMapData = function() {

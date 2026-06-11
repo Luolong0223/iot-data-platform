@@ -6,61 +6,88 @@
 <div class="fade-in">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="mb-0"><i class="bi bi-speedometer2"></i> 仪表盘</h4>
-        <span class="text-muted">{{ current_user.username }}</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-success" id="sseStatus"><i class="bi bi-broadcast"></i> 实时连接中</span>
+            <span class="text-muted">{{ current_user.username }}</span>
+        </div>
     </div>
 
+    <!-- Row 1: 6 Stat Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card-mini">
+                <div class="card-body d-flex align-items-center gap-2">
+                    <div class="stat-icon-sm bg-primary"><i class="bi bi-hdd-rack"></i></div>
+                    <div>
+                        <div class="stat-value-sm" id="statDevices">0</div>
+                        <div class="stat-label-sm">设备总数</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card-mini success">
+                <div class="card-body d-flex align-items-center gap-2">
+                    <div class="stat-icon-sm bg-success"><i class="bi bi-wifi"></i></div>
+                    <div>
+                        <div class="stat-value-sm" id="statOnline">0</div>
+                        <div class="stat-label-sm">在线通道</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card-mini danger">
+                <div class="card-body d-flex align-items-center gap-2">
+                    <div class="stat-icon-sm bg-danger"><i class="bi bi-wifi-off"></i></div>
+                    <div>
+                        <div class="stat-value-sm" id="statOffline">0</div>
+                        <div class="stat-label-sm">离线通道</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card-mini warning">
+                <div class="card-body d-flex align-items-center gap-2">
+                    <div class="stat-icon-sm bg-warning"><i class="bi bi-database"></i></div>
+                    <div>
+                        <div class="stat-value-sm" id="statToday">0</div>
+                        <div class="stat-label-sm">今日数据</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card-mini danger">
+                <div class="card-body d-flex align-items-center gap-2">
+                    <div class="stat-icon-sm bg-danger"><i class="bi bi-bell"></i></div>
+                    <div>
+                        <div class="stat-value-sm" id="statAlarms">0</div>
+                        <div class="stat-label-sm">今日报警</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card-mini info">
+                <div class="card-body d-flex align-items-center gap-2">
+                    <div class="stat-icon-sm bg-info"><i class="bi bi-lightning"></i></div>
+                    <div>
+                        <div class="stat-value-sm" id="statVoltage">-</div>
+                        <div class="stat-label-sm">电压状态</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Trend Chart + Real-time Data Stream -->
     <div class="row g-4 mb-4">
-        <div class="col-md-6 col-lg-3">
-            <div class="card stat-card">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <div class="stat-icon"><i class="bi bi-hdd-rack"></i></div>
-                    <div>
-                        <div class="stat-value" id="statDevices">0</div>
-                        <div class="stat-label">设备总数</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6 col-lg-3">
-            <div class="card stat-card success">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <div class="stat-icon"><i class="bi bi-wifi"></i></div>
-                    <div>
-                        <div class="stat-value" id="statOnline">0</div>
-                        <div class="stat-label">在线通道</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6 col-lg-3">
-            <div class="card stat-card warning">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <div class="stat-icon"><i class="bi bi-database"></i></div>
-                    <div>
-                        <div class="stat-value" id="statDataPoints">0</div>
-                        <div class="stat-label">数据点总数</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6 col-lg-3">
-            <div class="card stat-card danger">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <div class="stat-icon"><i class="bi bi-activity"></i></div>
-                    <div>
-                        <div class="stat-value" id="statToday">0</div>
-                        <div class="stat-label">今日数据</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-4">
         <div class="col-lg-8">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-graph-up"></i> 数据趋势</span>
+                    <span><i class="bi bi-graph-up"></i> 实时趋势图（最近24小时数据量）</span>
                     <select class="form-select form-select-sm w-auto" id="chartPeriod">
                         <option value="24h">最近24小时</option>
                         <option value="7d">最近7天</option>
@@ -68,17 +95,48 @@
                     </select>
                 </div>
                 <div class="card-body">
-                    <canvas id="dashboardChart" height="120"></canvas>
+                    <canvas id="trendChart" height="140"></canvas>
                 </div>
             </div>
         </div>
         <div class="col-lg-4">
-            <div class="card">
-                <div class="card-header">
-                    <i class="bi bi-clock-history"></i> 最近活动
+            <div class="card h-100 realtime-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-lightning-charge"></i> 实时数据流</span>
+                    <span class="badge bg-success animate-pulse">LIVE</span>
                 </div>
                 <div class="card-body p-0">
-                    <ul class="list-group list-group-flush" id="recentActivity">
+                    <ul class="list-group list-group-flush" id="realtimeDataList">
+                        <li class="list-group-item text-center text-muted py-4">加载中...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: Recent Alarms + Device Status -->
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-bell"></i> 最近报警</span>
+                    <a href="{{ url_for('pages.alarms') }}" class="btn btn-sm btn-outline-primary">查看全部</a>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush" id="recentAlarmList">
+                        <li class="list-group-item text-center text-muted py-4">加载中...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-hdd-rack"></i> 设备在线状态</span>
+                    <a href="{{ url_for('pages.devices') }}" class="btn btn-sm btn-outline-primary">查看全部</a>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush" id="deviceStatusList">
                         <li class="list-group-item text-center text-muted py-4">加载中...</li>
                     </ul>
                 </div>
@@ -90,77 +148,5 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="{{ url_for('static', filename='js/chart.js') }}"></script>
-<script>
-(function() {
-    function loadStats() {
-        apiRequest('/api/data/latest').then(function(data) {
-            const devices = data.devices || [];
-            document.getElementById('statDevices').textContent = devices.length;
-            
-            let onlineCount = 0;
-            let dataPointCount = 0;
-            let todayCount = 0;
-            const today = new Date().toISOString().slice(0, 10);
-            
-            devices.forEach(function(device) {
-                const channels = device.channels || [];
-                channels.forEach(function(ch) {
-                    if (ch.online) onlineCount++;
-                    const points = ch.latest_points || [];
-                    dataPointCount += points.length;
-                    points.forEach(function(p) {
-                        if (p.timestamp && p.timestamp.slice(0, 10) === today) todayCount++;
-                    });
-                });
-            });
-            
-            document.getElementById('statOnline').textContent = onlineCount;
-            document.getElementById('statDataPoints').textContent = dataPointCount;
-            document.getElementById('statToday').textContent = todayCount;
-        }).catch(function() {});
-    }
-
-    function loadActivity() {
-        apiRequest('/api/data/latest').then(function(data) {
-            const list = document.getElementById('recentActivity');
-            const devices = data.devices || [];
-            const activities = [];
-            
-            devices.forEach(function(device) {
-                const channels = device.channels || [];
-                channels.forEach(function(ch) {
-                    const points = ch.latest_points || [];
-                    if (points.length > 0) {
-                        activities.push({
-                            message: device.name + ' / ' + ch.name + ': ' + ch.online + ' 在线',
-                            status: ch.online ? 'online' : 'offline',
-                            time: points[0].timestamp ? formatDateTime(points[0].timestamp) : ''
-                        });
-                    }
-                });
-            });
-            
-            if (activities.length) {
-                list.innerHTML = activities.slice(0, 10).map(function(item) {
-                    return '<li class="list-group-item d-flex justify-content-between align-items-center">' +
-                        '<div><i class="bi bi-circle-fill text-' + (item.status === 'online' ? 'success' : 'secondary') + '" style="font-size:0.5rem;margin-right:0.5rem;"></i>' +
-                        item.message + '</div>' +
-                        '<small class="text-muted">' + (item.time || '') + '</small></li>';
-                }).join('');
-            } else {
-                list.innerHTML = '<li class="list-group-item text-center text-muted py-4">暂无活动记录</li>';
-            }
-        }).catch(function() {
-            document.getElementById('recentActivity').innerHTML = '<li class="list-group-item text-center text-muted py-4">加载失败</li>';
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        loadStats();
-        loadActivity();
-        initDashboardChart('dashboardChart');
-    });
-})();
-</script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

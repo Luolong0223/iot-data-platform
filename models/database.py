@@ -131,3 +131,68 @@ class TcpLog(db.Model):
             'error_msg': self.error_msg,
             'received_at': self.received_at.isoformat() if self.received_at else None
         }
+
+
+class AlarmRule(db.Model):
+    __tablename__ = 'alarm_rules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    device_name = db.Column(db.String(100), nullable=False)
+    channel_name = db.Column(db.String(100), nullable=False)
+    point_name = db.Column(db.String(100), nullable=False)
+    condition = db.Column(db.String(10), nullable=False)  # 'gt', 'lt', 'eq'
+    threshold = db.Column(db.Float, nullable=False)
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', backref='alarm_rules')
+    alarm_records = db.relationship('AlarmRecord', backref='rule', lazy='dynamic')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'device_name': self.device_name,
+            'channel_name': self.channel_name,
+            'point_name': self.point_name,
+            'condition': self.condition,
+            'threshold': self.threshold,
+            'enabled': self.enabled,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class AlarmRecord(db.Model):
+    __tablename__ = 'alarm_records'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    rule_id = db.Column(db.Integer, db.ForeignKey('alarm_rules.id'), nullable=True)
+    device_name = db.Column(db.String(100), nullable=False)
+    channel_name = db.Column(db.String(100), nullable=False)
+    point_name = db.Column(db.String(100), nullable=False)
+    value = db.Column(db.Float, nullable=False)
+    threshold = db.Column(db.Float, nullable=False)
+    condition = db.Column(db.String(10), nullable=False)
+    message = db.Column(db.String(500), nullable=False)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', backref='alarm_records')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'rule_id': self.rule_id,
+            'device_name': self.device_name,
+            'channel_name': self.channel_name,
+            'point_name': self.point_name,
+            'value': self.value,
+            'threshold': self.threshold,
+            'condition': self.condition,
+            'message': self.message,
+            'is_read': self.is_read,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }

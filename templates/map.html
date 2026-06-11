@@ -4,10 +4,6 @@
 
 {% block title %}地图展示 - IoT Data Platform{% endblock %}
 
-{% block extra_css %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
-{% endblock %}
-
 {% block content %}
 <div class="fade-in">
     <div class="d-flex justify-content-between align-items-center mb-2 px-2">
@@ -26,11 +22,11 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://api.map.baidu.com/api?v=3.0&ak={{ baidu_map_ak }}"></script>
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    initMap('map', 26.5933, 106.7135, 12);
+    initBaiduMap('map', 106.7135, 26.5933, 12);
     loadDeviceMarkers();
 });
 </script>

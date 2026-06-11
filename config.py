@@ -25,6 +25,7 @@ class Config:
     MAP_DEFAULT_LAT = 26.5933  # 贵阳默认纬度
     MAP_DEFAULT_LNG = 106.7135  # 贵阳默认经度
     MAP_DEFAULT_ZOOM = 12
+    BAIDU_MAP_AK = os.environ.get('BAIDU_MAP_AK') or ''
 
 class DevelopmentConfig(Config):
     DEBUG = True

@@ -13,6 +13,8 @@ from routes.devices import devices_bp
 from routes.data import data_bp
 from routes.tcp import tcp_bp
 from routes.pages import pages_bp
+from routes.alarms import alarms_bp
+from routes.stream import stream_bp
 
 logging.basicConfig(level=logging.INFO)
 
@@ -63,6 +65,8 @@ def create_app(config_name=None):
     app.register_blueprint(data_bp)
     app.register_blueprint(tcp_bp)
     app.register_blueprint(pages_bp)
+    app.register_blueprint(alarms_bp)
+    app.register_blueprint(stream_bp)
 
     with app.app_context():
         db.create_all()

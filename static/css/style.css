@@ -416,3 +416,183 @@ body {
 [data-bs-theme="dark"] ::-webkit-scrollbar-thumb:hover {
     background: #5a5a7a;
 }
+
+/* v2.0 Dashboard Enhancements */
+
+/* Stat Card Mini (6-column layout) */
+.stat-card-mini {
+    border-left: 3px solid var(--accent-color);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card-mini.success { border-left-color: var(--success-color); }
+.stat-card-mini.warning { border-left-color: var(--warning-color); }
+.stat-card-mini.danger { border-left-color: var(--danger-color); }
+.stat-card-mini.info { border-left-color: var(--info-color); }
+
+.stat-card-mini .stat-icon-sm {
+    width: 36px;
+    height: 36px;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.stat-card-mini .stat-value-sm {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    line-height: 1.2;
+}
+
+[data-bs-theme="dark"] .stat-card-mini .stat-value-sm {
+    color: var(--text-dark);
+}
+
+.stat-card-mini .stat-label-sm {
+    font-size: 0.75rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Realtime Card with glowing border */
+.realtime-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.realtime-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--success-color), transparent);
+    animation: glowPulse 2s infinite;
+}
+
+@keyframes glowPulse {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+}
+
+.animate-pulse {
+    animation: pulseBadge 2s infinite;
+}
+
+@keyframes pulseBadge {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* Alarm unread highlight */
+.alarm-unread {
+    border-left: 3px solid var(--danger-color) !important;
+    background-color: rgba(231, 76, 60, 0.05);
+}
+
+[data-bs-theme="dark"] .alarm-unread {
+    background-color: rgba(231, 76, 60, 0.1);
+}
+
+/* Device status indicators */
+.device-status-online {
+    border-left: 3px solid var(--success-color) !important;
+}
+
+.device-status-partial {
+    border-left: 3px solid var(--warning-color) !important;
+}
+
+.device-status-offline {
+    border-left: 3px solid var(--danger-color) !important;
+}
+
+/* Dashboard responsive adjustments */
+@media (max-width: 991.98px) {
+    .stat-card-mini .stat-value-sm {
+        font-size: 1.1rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .stat-card-mini .stat-icon-sm {
+        width: 28px;
+        height: 28px;
+        font-size: 0.9rem;
+    }
+    .stat-card-mini .stat-value-sm {
+        font-size: 1rem;
+    }
+    .stat-card-mini .stat-label-sm {
+        font-size: 0.65rem;
+    }
+}
+
+/* Map popup styles for Baidu Map */
+.map-popup .popup-title {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+}
+
+.map-popup .popup-data {
+    font-size: 0.875rem;
+}
+
+.map-popup .popup-data .label {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+[data-bs-theme="dark"] .map-popup .popup-data .label {
+    color: #a0a0c0;
+}
+
+/* DataTables dark mode fixes */
+[data-bs-theme="dark"] .dataTables_wrapper .dataTables_length,
+[data-bs-theme="dark"] .dataTables_wrapper .dataTables_filter,
+[data-bs-theme="dark"] .dataTables_wrapper .dataTables_info,
+[data-bs-theme="dark"] .dataTables_wrapper .dataTables_processing,
+[data-bs-theme="dark"] .dataTables_wrapper .dataTables_paginate {
+    color: var(--text-dark);
+}
+
+[data-bs-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button {
+    color: var(--text-dark) !important;
+}
+
+[data-bs-theme="dark"] table.dataTable tbody tr {
+    background-color: var(--card-bg-dark);
+    color: var(--text-dark);
+}
+
+[data-bs-theme="dark"] table.dataTable thead th {
+    color: var(--text-dark);
+    border-bottom-color: var(--border-dark);
+}
+
+[data-bs-theme="dark"] table.dataTable tbody td {
+    border-bottom-color: var(--border-dark);
+}
+
+[data-bs-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: var(--accent-color) !important;
+    color: #fff !important;
+    border-color: var(--accent-color) !important;
+}
+
+[data-bs-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #2980b9 !important;
+    color: #fff !important;
+    border-color: #2980b9 !important;
+}
+
