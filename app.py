@@ -2,6 +2,7 @@ import os
 import logging
 from flask import Flask
 from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 
 from config import config
 from models.database import db, User
@@ -15,6 +16,7 @@ from routes.pages import pages_bp
 logging.basicConfig(level=logging.INFO)
 
 login_manager = LoginManager()
+csrf = CSRFProtect()
 
 
 def create_app(config_name=None):
@@ -26,7 +28,8 @@ def create_app(config_name=None):
 
     db.init_app(app)
     login_manager.init_app(app)
-    login_manager.login_view = 'auth.login'
+    csrf.init_app(app)
+    login_manager.login_view = 'pages.login'
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
