@@ -23,20 +23,32 @@ tcp_thread = None
 
 
 async def start_user_server(handler, user_id, port, host):
+    logger.info(f"[TCP] Attempting to start server for user {user_id} on {host}:{port}")
     try:
+        # Python 3.7 不支持 reuse_address 参数，手动设置 socket 选项
+        import socket as socket_module
+        
+        def factory():
+            sock = socket_module.socket(socket_module.AF_INET, socket_module.SOCK_STREAM)
+            sock.setsockopt(socket_module.SOL_SOCKET, socket_module.SO_REUSEADDR, 1)
+            return sock
+        
         server = await asyncio.start_server(
             handler.handle_client,
             host,
-            port,
-            reuse_address=True
+            port
         )
         servers[user_id] = server
         logger.info(f"[TCP] Server started for user {user_id} on port {port}")
         return server
     except OSError as e:
-        if e.errno == 10048 or e.errno == 48:  # Address already in use (Windows/Linux)
-            logger.info(f"[TCP] Port {port} already in use, skipping")
-            return None
+        logger.error(f"[TCP] OSError starting server for user {user_id} on port {port}: {e} (errno={e.errno})")
+        return None
+    except TypeError as e:
+        logger.error(f"[TCP] TypeError starting server for user {user_id}: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"[TCP] Unexpected error starting server for user {user_id} on port {port}: {e}", exc_info=True)
         raise
 
 
@@ -49,16 +61,19 @@ async def stop_user_server(user_id):
 
 
 async def refresh_servers(app, handler_class):
+    logger.info("[TCP] Refreshing servers...")
     try:
         with app.app_context():
             from models.database import User
             users = User.query.filter(User.tcp_port.isnot(None)).all()
     except Exception as e:
-        logger.error(f"[TCP] Failed to query users: {e}")
+        logger.error(f"[TCP] Failed to query users: {e}", exc_info=True)
         return
 
+    logger.info(f"[TCP] Found {len(users)} users with TCP port assigned")
     active_user_ids = set()
     for user in users:
+        logger.info(f"[TCP] Processing user {user.id} ({user.username}) port={user.tcp_port}")
         active_user_ids.add(user.id)
         if user.id not in servers:
             try:
@@ -68,7 +83,9 @@ async def refresh_servers(app, handler_class):
                     app.config.get('TCP_HOST', '0.0.0.0')
                 )
             except Exception as e:
-                logger.error(f"[TCP] Failed to start server for user {user.id} on port {user.tcp_port}: {e}")
+                logger.error(f"[TCP] Failed to start server for user {user.id} on port {user.tcp_port}: {e}", exc_info=True)
+        else:
+            logger.info(f"[TCP] Server for user {user.id} already running")
 
     for user_id in list(servers.keys()):
         if user_id not in active_user_ids:
