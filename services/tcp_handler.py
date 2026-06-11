@@ -1,11 +1,20 @@
 import asyncio
 import json
 import logging
+import os
 
 from models.database import db, User, Device, SlaveChannel, DataPoint, TcpLog
 from services.data_parser import parse_tcp_data
 
 logger = logging.getLogger(__name__)
+
+# 添加文件日志处理器
+log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tcp_handler.log')
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 
 class TcpConnectionHandler:

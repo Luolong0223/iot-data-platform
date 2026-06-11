@@ -1,5 +1,6 @@
 import os
 import logging
+import threading
 from flask import Flask
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
@@ -17,6 +18,31 @@ logging.basicConfig(level=logging.INFO)
 
 login_manager = LoginManager()
 csrf = CSRFProtect()
+
+# 防止 TCP 服务器被重复启动
+_tcp_server_started = False
+
+
+def _start_tcp_server_once(app):
+    """在后台线程启动 TCP 服务器，确保只启动一次"""
+    global _tcp_server_started
+    if _tcp_server_started:
+        logging.info("[TCP] Server already started, skipping")
+        return
+    _tcp_server_started = True
+
+    def tcp_thread_target():
+        try:
+            from tcp_server import run_tcp_server
+            from services.tcp_handler import TcpConnectionHandler
+            logging.info("[TCP] Starting TCP server in background thread...")
+            run_tcp_server(app, TcpConnectionHandler)
+        except Exception as e:
+            logging.error(f"[TCP] Failed to start TCP server: {e}", exc_info=True)
+
+    t = threading.Thread(target=tcp_thread_target, daemon=True)
+    t.start()
+    logging.info(f"[TCP] TCP server thread launched (alive={t.is_alive()})")
 
 
 def create_app(config_name=None):
@@ -41,6 +67,9 @@ def create_app(config_name=None):
     with app.app_context():
         db.create_all()
         create_default_admin()
+
+    # 自动启动 TCP 服务器（无论通过 run.py 还是 wsgi.py 入口）
+    _start_tcp_server_once(app)
 
     return app
 

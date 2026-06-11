@@ -5,8 +5,17 @@ import sys
 import threading
 import time
 
+# 配置日志：同时输出到控制台和文件
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# 添加文件日志处理器（确保日志写入文件，方便宝塔排查）
+log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tcp_server.log')
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
 servers = {}
 tcp_loop = None
