@@ -13,7 +13,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #2c3e50;">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+            <a class="navbar-brand" href="{{ url_for('pages.dashboard') }}">
                 <i class="bi bi-cpu"></i> IoT Data Platform
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
@@ -31,10 +31,10 @@
                             <i class="bi bi-person-circle"></i> {{ current_user.username }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2"></i> 返回前台</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('profile') }}"><i class="bi bi-person"></i> 个人设置</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('pages.dashboard') }}"><i class="bi bi-speedometer2"></i> 返回前台</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('pages.profile') }}"><i class="bi bi-person"></i> 个人设置</a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> 退出登录</a></li>
+                            <li><a class="dropdown-item text-danger" href="{{ url_for('pages.logout') }}"><i class="bi bi-box-arrow-right"></i> 退出登录</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -49,17 +49,17 @@
             </div>
             <ul class="nav flex-column">
                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}" href="{{ url_for('admin_users') }}">
+                    <a class="nav-link {% if request.endpoint == 'pages.admin_users' %}active{% endif %}" href="{{ url_for('pages.admin_users') }}">
                         <i class="bi bi-people"></i> 用户管理
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'admin_tcp' %}active{% endif %}" href="{{ url_for('admin_tcp') }}">
+                    <a class="nav-link {% if request.endpoint == 'pages.admin_tcp' %}active{% endif %}" href="{{ url_for('pages.admin_tcp') }}">
                         <i class="bi bi-ethernet"></i> TCP 管理
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint == 'admin_system' %}active{% endif %}" href="{{ url_for('admin_system') }}">
+                    <a class="nav-link {% if request.endpoint == 'pages.admin_system' %}active{% endif %}" href="{{ url_for('pages.admin_system') }}">
                         <i class="bi bi-gear"></i> 系统设置
                     </a>
                 </li>
