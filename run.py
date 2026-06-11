@@ -1,6 +1,5 @@
 import os
 import sys
-import threading
 from app import create_app
 
 app = create_app()
@@ -16,9 +15,7 @@ def start_tcp_server():
 
 if __name__ == '__main__':
     # 启动TCP服务器后台线程
-    tcp_thread = threading.Thread(target=start_tcp_server, daemon=True)
-    tcp_thread.start()
-    print("TCP server started in background thread")
-
-    # 启动Flask Web服务
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    start_tcp_server()
+    
+    # 启动Flask Web服务（禁用reloader避免TCP重复启动）
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
