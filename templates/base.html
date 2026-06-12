@@ -28,6 +28,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.hierarchy' %}active{% endif %}" href="{{ url_for('pages.hierarchy') }}">
+                            <i class="bi bi-diagram-3"></i> 层级管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'pages.devices' %}active{% endif %}" href="{{ url_for('pages.devices') }}">
                             <i class="bi bi-hdd-rack"></i> 设备管理
                         </a>
@@ -45,6 +50,11 @@
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'pages.alarms' %}active{% endif %}" href="{{ url_for('pages.alarms') }}">
                             <i class="bi bi-bell"></i> 报警管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.alarm_rules' %}active{% endif %}" href="{{ url_for('pages.alarm_rules') }}">
+                            <i class="bi bi-sliders"></i> 告警规则
                         </a>
                     </li>
                     <li class="nav-item">

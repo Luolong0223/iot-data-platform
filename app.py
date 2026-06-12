@@ -22,6 +22,8 @@ from routes.export import export_bp
 from routes.groups import groups_bp
 from routes.realtime import realtime_bp
 from routes.dashboard_api import dashboard_bp
+from routes.projects import projects_bp
+from routes.alarm_rules import alarm_rules_bp
 
 logging.basicConfig(level=logging.INFO)
 
@@ -91,6 +93,8 @@ def create_app(config_name=None):
     app.register_blueprint(groups_bp)
     app.register_blueprint(realtime_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(projects_bp)
+    app.register_blueprint(alarm_rules_bp)
 
     with app.app_context():
         db.create_all()

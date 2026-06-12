@@ -1,0 +1,668 @@
+{% extends "base.html" %}
+
+{% block title %}设备层级管理 - IoT数据平台{% endblock %}
+
+{% block extra_css %}
+<style>
+.hierarchy-container {
+    display: flex;
+    height: calc(100vh - 200px);
+    min-height: 500px;
+}
+
+.hierarchy-tree {
+    width: 320px;
+    border-right: 1px solid var(--border-color, #dee2e6);
+    overflow-y: auto;
+    padding: 15px;
+    background: var(--card-bg, #fff);
+}
+
+.hierarchy-detail {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.tree-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.tree-item:hover {
+    background: var(--hover-bg, #f0f0f0);
+}
+
+.tree-item.active {
+    background: var(--primary-color, #3498db);
+    color: white;
+}
+
+.tree-item .icon {
+    width: 20px;
+    text-align: center;
+}
+
+.tree-item .name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-item .count {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.tree-children {
+    margin-left: 20px;
+    display: none;
+}
+
+.tree-children.expanded {
+    display: block;
+}
+
+.tree-toggle {
+    cursor: pointer;
+    width: 16px;
+    display: inline-block;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-online { background: #27ae60; }
+.status-offline { background: #e74c3c; }
+.status-warning { background: #f39c12; }
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.detail-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: var(--card-bg, #fff);
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--primary-color, #3498db);
+}
+
+.stat-label {
+    font-size: 12px;
+    color: var(--text-muted, #6c757d);
+    margin-top: 5px;
+}
+
+.device-list {
+    background: var(--card-bg, #fff);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.device-list-header {
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color, #dee2e6);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.device-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border-color, #dee2e6);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.device-item:hover {
+    background: var(--hover-bg, #f8f9fa);
+}
+
+.device-item:last-child {
+    border-bottom: none;
+}
+
+.device-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.device-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.device-info {
+    font-size: 13px;
+    color: var(--text-muted, #6c757d);
+}
+
+.breadcrumb-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.breadcrumb-nav span {
+    color: var(--text-muted, #6c757d);
+}
+
+.breadcrumb-nav a {
+    color: var(--primary-color, #3498db);
+    text-decoration: none;
+}
+
+.breadcrumb-nav a:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">📁 设备层级管理</h4>
+        <div>
+            <button class="btn btn-primary btn-sm" onclick="createProject()">
+                <i class="bi bi-plus-lg"></i> 新建项目
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="expandAll()">
+                展开全部
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="collapseAll()">
+                收起全部
+            </button>
+        </div>
+    </div>
+    
+    <div class="hierarchy-container">
+        <!-- 左侧树形结构 -->
+        <div class="hierarchy-tree">
+            <div id="treeContent">
+                <!-- 动态加载 -->
+            </div>
+        </div>
+        
+        <!-- 右侧详情面板 -->
+        <div class="hierarchy-detail">
+            <div id="detailContent">
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-folder2-open" style="font-size: 48px;"></i>
+                    <p class="mt-3">请选择左侧的项目或分组查看详情</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新建项目模态框 -->
+<div class="modal fade" id="projectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新建项目</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="projectForm">
+                    <div class="mb-3">
+                        <label class="form-label">项目名称</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">位置</label>
+                        <input type="text" class="form-control" name="location" placeholder="如：北京市朝阳区">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveProject()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新建分组模态框 -->
+<div class="modal fade" id="groupModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新建分组</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="groupForm">
+                    <input type="hidden" name="project_id" id="groupProjectId">
+                    <div class="mb-3">
+                        <label class="form-label">分组名称</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">颜色标签</label>
+                        <input type="color" class="form-control form-control-color" name="color" value="#3498db">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveGroup()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentSelection = null;
+
+// 加载层级树
+function loadHierarchyTree() {
+    fetch('/api/projects/hierarchy')
+        .then(res => res.json())
+        .then(data => {
+            renderTree(data);
+        })
+        .catch(err => {
+            console.error('加载失败:', err);
+            document.getElementById('treeContent').innerHTML = 
+                '<div class="text-center text-muted py-3">加载失败</div>';
+        });
+}
+
+// 渲染树形结构
+function renderTree(data) {
+    const container = document.getElementById('treeContent');
+    
+    if (!data || data.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-3">
+                <p>暂无项目</p>
+                <button class="btn btn-sm btn-primary" onclick="createProject()">创建项目</button>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    data.forEach(project => {
+        html += `
+            <div class="tree-item" data-type="project" data-id="${project.id}" onclick="selectItem('project', ${project.id})">
+                <span class="tree-toggle" onclick="event.stopPropagation(); toggleTree(this)">
+                    <i class="bi bi-caret-right"></i>
+                </span>
+                <span class="icon">📁</span>
+                <span class="name">${project.name}</span>
+                <span class="count">${project.device_count || 0}设备</span>
+            </div>
+            <div class="tree-children">
+                ${renderGroups(project.groups || [])}
+                <div class="tree-item" style="color: var(--text-muted)" onclick="event.stopPropagation(); createGroup(${project.id})">
+                    <span class="tree-toggle"></span>
+                    <span class="icon">+</span>
+                    <span class="name">新建分组</span>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// 渲染分组
+function renderGroups(groups) {
+    if (!groups || groups.length === 0) return '';
+    
+    let html = '';
+    groups.forEach(group => {
+        html += `
+            <div class="tree-item" data-type="group" data-id="${group.id}" onclick="selectItem('group', ${group.id})">
+                <span class="tree-toggle" onclick="event.stopPropagation(); toggleTree(this)">
+                    <i class="bi bi-caret-right"></i>
+                </span>
+                <span class="icon">📂</span>
+                <span class="name">${group.name}</span>
+                <span class="count">${group.device_count || 0}</span>
+            </div>
+            <div class="tree-children">
+                ${renderDevices(group.devices || [])}
+            </div>
+        `;
+    });
+    return html;
+}
+
+// 渲染设备
+function renderDevices(devices) {
+    if (!devices || devices.length === 0) return '';
+    
+    let html = '';
+    devices.forEach(device => {
+        const statusClass = device.is_online ? 'status-online' : 'status-offline';
+        html += `
+            <div class="tree-item" data-type="device" data-id="${device.id}" onclick="selectItem('device', ${device.id})">
+                <span class="tree-toggle"></span>
+                <span class="icon"><span class="status-dot ${statusClass}"></span></span>
+                <span class="name">${device.name}</span>
+            </div>
+        `;
+    });
+    return html;
+}
+
+// 展开/收起
+function toggleTree(el) {
+    const icon = el.querySelector('i');
+    const children = el.parentElement.nextElementSibling;
+    
+    if (children.classList.contains('expanded')) {
+        children.classList.remove('expanded');
+        icon.classList.remove('bi-caret-down');
+        icon.classList.add('bi-caret-right');
+    } else {
+        children.classList.add('expanded');
+        icon.classList.remove('bi-caret-right');
+        icon.classList.add('bi-caret-down');
+    }
+}
+
+// 展开全部
+function expandAll() {
+    document.querySelectorAll('.tree-children').forEach(el => el.classList.add('expanded'));
+    document.querySelectorAll('.tree-toggle i').forEach(el => {
+        el.classList.remove('bi-caret-right');
+        el.classList.add('bi-caret-down');
+    });
+}
+
+// 收起全部
+function collapseAll() {
+    document.querySelectorAll('.tree-children').forEach(el => el.classList.remove('expanded'));
+    document.querySelectorAll('.tree-toggle i').forEach(el => {
+        el.classList.add('bi-caret-right');
+        el.classList.remove('bi-caret-down');
+    });
+}
+
+// 选择项目
+function selectItem(type, id) {
+    // 更新选中状态
+    document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.tree-item[data-type="${type}"][data-id="${id}"]`)?.classList.add('active');
+    
+    currentSelection = { type, id };
+    
+    // 加载详情
+    loadDetail(type, id);
+}
+
+// 加载详情
+function loadDetail(type, id) {
+    const container = document.getElementById('detailContent');
+    container.innerHTML = '<div class="text-center py-5"><div class="spinner-border"></div></div>';
+    
+    fetch(`/api/${type}s/${id}/detail`)
+        .then(res => res.json())
+        .then(data => {
+            renderDetail(type, data);
+        })
+        .catch(err => {
+            container.innerHTML = '<div class="alert alert-danger">加载失败</div>';
+        });
+}
+
+// 渲染详情
+function renderDetail(type, data) {
+    const container = document.getElementById('detailContent');
+    
+    if (type === 'project') {
+        container.innerHTML = `
+            <div class="detail-header">
+                <div>
+                    <h4>📁 ${data.name}</h4>
+                    <div class="breadcrumb-nav">
+                        <span>项目</span>
+                    </div>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary btn-sm" onclick="editProject(${data.id})">编辑</button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteProject(${data.id})">删除</button>
+                </div>
+            </div>
+            
+            <div class="detail-stats">
+                <div class="stat-card">
+                    <div class="stat-value">${data.group_count || 0}</div>
+                    <div class="stat-label">分组数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.device_count || 0}</div>
+                    <div class="stat-label">设备数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value text-success">${data.online_count || 0}</div>
+                    <div class="stat-label">在线设备</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value text-danger">${data.offline_count || 0}</div>
+                    <div class="stat-label">离线设备</div>
+                </div>
+            </div>
+            
+            <div class="device-list">
+                <div class="device-list-header">
+                    <span>设备列表</span>
+                    <button class="btn btn-sm btn-primary" onclick="createGroup(${data.id})">新建分组</button>
+                </div>
+                <div id="deviceListContent">
+                    ${renderDeviceList(data.devices || [])}
+                </div>
+            </div>
+        `;
+    } else if (type === 'group') {
+        container.innerHTML = `
+            <div class="detail-header">
+                <div>
+                    <h4>📂 ${data.name}</h4>
+                    <div class="breadcrumb-nav">
+                        <a href="#" onclick="selectItem('project', ${data.project_id})">${data.project_name || '项目'}</a>
+                        <span>›</span>
+                        <span>${data.name}</span>
+                    </div>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary btn-sm" onclick="editGroup(${data.id})">编辑</button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteGroup(${data.id})">删除</button>
+                </div>
+            </div>
+            
+            <div class="detail-stats">
+                <div class="stat-card">
+                    <div class="stat-value">${data.device_count || 0}</div>
+                    <div class="stat-label">设备数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value text-success">${data.online_count || 0}</div>
+                    <div class="stat-label">在线</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value text-danger">${data.offline_count || 0}</div>
+                    <div class="stat-label">离线</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.channel_count || 0}</div>
+                    <div class="stat-label">通道数</div>
+                </div>
+            </div>
+            
+            <div class="device-list">
+                <div class="device-list-header">
+                    <span>设备列表</span>
+                    <button class="btn btn-sm btn-primary" onclick="addDeviceToGroup(${data.id})">添加设备</button>
+                </div>
+                <div>
+                    ${renderDeviceList(data.devices || [])}
+                </div>
+            </div>
+        `;
+    } else if (type === 'device') {
+        window.location.href = `/devices/${id}`;
+    }
+}
+
+// 渲染设备列表
+function renderDeviceList(devices) {
+    if (!devices || devices.length === 0) {
+        return '<div class="text-center text-muted py-3">暂无设备</div>';
+    }
+    
+    let html = '';
+    devices.forEach(device => {
+        const statusClass = device.is_online ? 'status-online' : 'status-offline';
+        const statusText = device.is_online ? '在线' : '离线';
+        html += `
+            <div class="device-item" onclick="window.location.href='/devices/${device.id}'">
+                <span class="device-status ${statusClass}"></span>
+                <span class="device-name">${device.name}</span>
+                <span class="device-info">${device.channel_count || 0}通道 | ${statusText}</span>
+            </div>
+        `;
+    });
+    return html;
+}
+
+// 新建项目
+function createProject() {
+    document.getElementById('projectForm').reset();
+    new bootstrap.Modal(document.getElementById('projectModal')).show();
+}
+
+// 保存项目
+function saveProject() {
+    const form = document.getElementById('projectForm');
+    const formData = new FormData(form);
+    
+    fetch('/api/projects', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('projectModal')).hide();
+            loadHierarchyTree();
+        } else {
+            alert(data.error || '保存失败');
+        }
+    });
+}
+
+// 新建分组
+function createGroup(projectId) {
+    document.getElementById('groupProjectId').value = projectId;
+    document.getElementById('groupForm').reset();
+    document.getElementById('groupProjectId').value = projectId;
+    new bootstrap.Modal(document.getElementById('groupModal')).show();
+}
+
+// 保存分组
+function saveGroup() {
+    const form = document.getElementById('groupForm');
+    const formData = new FormData(form);
+    
+    fetch('/api/groups', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('groupModal')).hide();
+            loadHierarchyTree();
+        } else {
+            alert(data.error || '保存失败');
+        }
+    });
+}
+
+// 删除项目
+function deleteProject(id) {
+    if (!confirm('确定要删除此项目吗？相关分组和设备将解除关联。')) return;
+    
+    fetch(`/api/projects/${id}`, { method: 'DELETE' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                loadHierarchyTree();
+                document.getElementById('detailContent').innerHTML = '';
+            } else {
+                alert(data.error || '删除失败');
+            }
+        });
+}
+
+// 删除分组
+function deleteGroup(id) {
+    if (!confirm('确定要删除此分组吗？设备将移出分组。')) return;
+    
+    fetch(`/api/groups/${id}`, { method: 'DELETE' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                loadHierarchyTree();
+                document.getElementById('detailContent').innerHTML = '';
+            } else {
+                alert(data.error || '删除失败');
+            }
+        });
+}
+
+// 初始化
+document.addEventListener('DOMContentLoaded', loadHierarchyTree);
+</script>
+{% endblock %}

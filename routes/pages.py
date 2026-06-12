@@ -76,6 +76,20 @@ def alarms():
     return render_template('alarms.html')
 
 
+@pages_bp.route('/alarm-rules')
+@login_required
+def alarm_rules():
+    """告警规则配置页面"""
+    return render_template('alarm_rules.html')
+
+
+@pages_bp.route('/hierarchy')
+@login_required
+def hierarchy():
+    """设备层级管理页面"""
+    return render_template('hierarchy.html')
+
+
 @pages_bp.route('/screen')
 @login_required
 def screen():

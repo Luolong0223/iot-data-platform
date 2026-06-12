@@ -47,20 +47,22 @@ class User(UserMixin, db.Model):
         }
 
 
-class DeviceGroup(db.Model):
-    """设备分组表"""
-    __tablename__ = 'device_groups'
+class Project(db.Model):
+    """项目表（第一层级）"""
+    __tablename__ = 'projects'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(500), nullable=True)
-    color = db.Column(db.String(7), default='#3498db', nullable=False)  # 分组颜色
+    description = db.Column(db.Text, nullable=True)
+    location = db.Column(db.String(200), nullable=True)
+    color = db.Column(db.String(7), default='#3498db', nullable=False)
     sort_order = db.Column(db.Integer, default=0, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    user = db.relationship('User', backref='device_groups')
-    devices = db.relationship('Device', back_populates='group', lazy='dynamic')
+    user = db.relationship('User', backref='projects')
+    groups = db.relationship('DeviceGroup', back_populates='project', lazy='dynamic')
 
     def to_dict(self):
         return {
@@ -68,31 +70,79 @@ class DeviceGroup(db.Model):
             'user_id': self.user_id,
             'name': self.name,
             'description': self.description,
+            'location': self.location,
+            'color': self.color,
+            'sort_order': self.sort_order,
+            'group_count': self.groups.count(),
+            'device_count': sum(g.devices.count() for g in self.groups),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class DeviceGroup(db.Model):
+    """设备分组表（第二层级）"""
+    __tablename__ = 'device_groups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True, index=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('device_groups.id'), nullable=True)  # 支持多级分组
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    color = db.Column(db.String(7), default='#3498db', nullable=False)
+    sort_order = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', backref='device_groups')
+    project = db.relationship('Project', back_populates='groups')
+    parent = db.relationship('DeviceGroup', remote_side=[id], backref='children')
+    devices = db.relationship('Device', back_populates='group', lazy='dynamic')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'project_id': self.project_id,
+            'project_name': self.project.name if self.project else None,
+            'parent_id': self.parent_id,
+            'name': self.name,
+            'description': self.description,
             'color': self.color,
             'sort_order': self.sort_order,
             'device_count': self.devices.count(),
+            'children_count': len(self.children) if self.children else 0,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 
 class Device(db.Model):
-    """设备表"""
+    """设备表（第三层级）"""
     __tablename__ = 'devices'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True, index=True)
     group_id = db.Column(db.Integer, db.ForeignKey('device_groups.id'), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
-    device_type = db.Column(db.String(50), nullable=True)  # 设备类型
+    device_type = db.Column(db.String(50), nullable=True)
+    device_key = db.Column(db.String(64), nullable=True, unique=True)  # 设备密钥
     voltage_mv = db.Column(db.Integer, nullable=True)
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
     location_name = db.Column(db.String(200), nullable=True)
-    last_seen_at = db.Column(db.DateTime, nullable=True)  # 最后通信时间
-    is_online = db.Column(db.Boolean, default=False, nullable=False)  # 在线状态
+    firmware_version = db.Column(db.String(32), nullable=True)  # 固件版本
+    ip_address = db.Column(db.String(45), nullable=True)  # IP地址
+    last_seen_at = db.Column(db.DateTime, nullable=True)
+    is_online = db.Column(db.Boolean, default=False, nullable=False)
+    storage_enabled = db.Column(db.Boolean, default=True, nullable=False)  # 是否存储数据
+    maintenance_interval = db.Column(db.Integer, default=30)  # 维护周期（天）
+    last_maintenance_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     user = db.relationship('User', back_populates='devices')
+    project = db.relationship('Project', backref='devices')
     group = db.relationship('DeviceGroup', back_populates='devices')
     channels = db.relationship('SlaveChannel', back_populates='device', cascade='all, delete-orphan', lazy='dynamic')
 
@@ -100,16 +150,24 @@ class Device(db.Model):
         return {
             'id': self.id,
             'user_id': self.user_id,
+            'project_id': self.project_id,
+            'project_name': self.project.name if self.project else None,
             'group_id': self.group_id,
             'group_name': self.group.name if self.group else None,
             'name': self.name,
             'device_type': self.device_type,
+            'device_key': self.device_key,
             'voltage_mv': self.voltage_mv,
             'latitude': self.latitude,
             'longitude': self.longitude,
             'location_name': self.location_name,
+            'firmware_version': self.firmware_version,
+            'ip_address': self.ip_address,
             'last_seen_at': self.last_seen_at.isoformat() if self.last_seen_at else None,
             'is_online': self.is_online,
+            'storage_enabled': self.storage_enabled,
+            'channel_count': self.channels.count(),
+            'data_count': sum(c.data_points.count() for c in self.channels),
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -324,4 +382,30 @@ class SystemConfig(db.Model):
             'value': self.value,
             'description': self.description,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class NotificationConfig(db.Model):
+    """通知配置表"""
+    __tablename__ = 'notification_configs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    notify_type = db.Column(db.String(20), nullable=False)  # email, dingtalk, wechat
+    name = db.Column(db.String(100), nullable=False)
+    config = db.Column(db.Text, nullable=False)  # JSON格式的配置
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship('User', backref='notification_configs')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'notify_type': self.notify_type,
+            'name': self.name,
+            'config': self.config,
+            'enabled': self.enabled,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

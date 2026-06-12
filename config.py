@@ -72,11 +72,23 @@ class Config:
     
     # 邮件配置（可选）
     MAIL_SERVER = os.environ.get('MAIL_SERVER', '')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
-    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', 465))
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'true').lower() == 'true'
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'false').lower() == 'true'
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', '')
+    
+    # 钉钉机器人配置
+    DINGTALK_WEBHOOK = os.environ.get('DINGTALK_WEBHOOK', '')
+    DINGTALK_SECRET = os.environ.get('DINGTALK_SECRET', '')
+    
+    # 企业微信机器人配置
+    WECOM_WEBHOOK = os.environ.get('WECOM_WEBHOOK', '')
+    
+    # 告警通知配置
+    ALARM_NOTIFICATION_CHANNELS = ['email', 'dingtalk']  # 可选: email, dingtalk, wecom
+    ALARM_EMAIL_RECIPIENTS = os.environ.get('ALARM_EMAIL_RECIPIENTS', '').split(',')
 
 
 class DevelopmentConfig(Config):
