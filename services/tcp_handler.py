@@ -86,29 +86,45 @@ class TcpConnectionHandler:
 
         try:
             while True:
-                data = await asyncio.wait_for(
-                    reader.read(self.app.config.get('TCP_BUFFER_SIZE', 4096)),
-                    timeout=self.app.config.get('TCP_TIMEOUT', 30)
-                )
+                try:
+                    data = await asyncio.wait_for(
+                        reader.read(self.app.config.get('TCP_BUFFER_SIZE', 4096)),
+                        timeout=self.app.config.get('TCP_TIMEOUT', 300)  # 增加到5分钟
+                    )
+                except asyncio.TimeoutError:
+                    logger.info(f"TCP connection timeout for {addr}")
+                    break
+                
                 if not data:
+                    logger.info(f"TCP client {addr} disconnected (empty data)")
                     break
 
                 raw_data = data.decode('utf-8', errors='replace').strip()
                 if not raw_data:
                     continue
 
-                await self.process_data(raw_data)
+                # 单独处理每条数据，出错不影响连接
+                try:
+                    await self.process_data(raw_data, addr)
+                except Exception as e:
+                    logger.error(f"TCP data processing error for {addr}: {e}", exc_info=True)
+                    # 继续保持连接，不退出循环
 
-        except asyncio.TimeoutError:
-            logger.info(f"TCP connection timeout for {addr}")
+        except ConnectionResetError:
+            logger.info(f"TCP connection reset by {addr}")
+        except BrokenPipeError:
+            logger.info(f"TCP connection broken pipe for {addr}")
         except Exception as e:
-            logger.error(f"TCP connection error for {addr}: {e}")
+            logger.error(f"TCP connection error for {addr}: {e}", exc_info=True)
         finally:
-            writer.close()
-            await writer.wait_closed()
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
             logger.info(f"TCP connection closed for {addr}")
 
-    async def process_data(self, raw_data):
+    async def process_data(self, raw_data, client_addr=None):
         with self.app.app_context():
             user = User.query.get(self.user_id)
             if not user:
@@ -117,6 +133,7 @@ class TcpConnectionHandler:
 
             parsed = False
             error_msg = None
+            client_ip = client_addr[0] if client_addr else None
 
             try:
                 result = parse_tcp_data(raw_data)
@@ -135,73 +152,90 @@ class TcpConnectionHandler:
                                 'value': dp['value'],
                                 'timestamp': datetime.utcnow().isoformat()
                             })
-                    self.check_alarms(user.id, result)
+                    try:
+                        self.check_alarms(user.id, result)
+                    except Exception as e:
+                        logger.error(f"Alarm check error: {e}")
 
             except ValueError as e:
                 error_msg = str(e)
                 logger.warning(f"Failed to parse TCP data for user {self.user_id}: {error_msg}")
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(f"Database error for user {self.user_id}: {e}", exc_info=True)
 
-            tcp_log = TcpLog(
-                user_id=user.id,
-                raw_data=raw_data,
-                parsed=parsed,
-                error_msg=error_msg
-            )
-            db.session.add(tcp_log)
-            db.session.commit()
+            try:
+                tcp_log = TcpLog(
+                    user_id=user.id,
+                    raw_data=raw_data,
+                    parsed=parsed,
+                    error_msg=error_msg,
+                    client_ip=client_ip
+                )
+                db.session.add(tcp_log)
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"Failed to save TCP log: {e}")
+                db.session.rollback()
 
     def store_data(self, user_id, result):
-        device_name = result['device_name']
-        voltage_mv = result['voltage_mv']
+        try:
+            device_name = result['device_name']
+            voltage_mv = result['voltage_mv']
 
-        device = Device.query.filter_by(user_id=user_id, name=device_name).first()
-        if not device:
-            device = Device(
-                user_id=user_id,
-                name=device_name,
-                voltage_mv=voltage_mv,
-                is_online=True,
-                last_seen_at=datetime.utcnow()
-            )
-            db.session.add(device)
-            db.session.flush()
-        else:
-            if voltage_mv is not None:
-                device.voltage_mv = voltage_mv
-            device.is_online = True
-            device.last_seen_at = datetime.utcnow()
-
-        for ch in result['channels']:
-            channel = SlaveChannel.query.filter_by(device_id=device.id, name=ch['name']).first()
-            if not channel:
-                channel = SlaveChannel(
-                    device_id=device.id,
-                    name=ch['name'],
-                    online=ch['online'],
-                    last_data_at=datetime.utcnow()
+            device = Device.query.filter_by(user_id=user_id, name=device_name).first()
+            if not device:
+                device = Device(
+                    user_id=user_id,
+                    name=device_name,
+                    voltage_mv=voltage_mv,
+                    is_online=True,
+                    last_seen_at=datetime.utcnow()
                 )
-                db.session.add(channel)
+                db.session.add(device)
                 db.session.flush()
             else:
-                channel.online = ch['online']
-                channel.last_data_at = datetime.utcnow()
+                if voltage_mv is not None:
+                    device.voltage_mv = voltage_mv
+                device.is_online = True
+                device.last_seen_at = datetime.utcnow()
 
-            for dp in ch['data_points']:
-                data_point = DataPoint(
-                    channel_id=channel.id,
-                    name=dp['name'],
-                    value=dp['value']
-                )
-                db.session.add(data_point)
+            for ch in result['channels']:
+                channel = SlaveChannel.query.filter_by(device_id=device.id, name=ch['name']).first()
+                if not channel:
+                    channel = SlaveChannel(
+                        device_id=device.id,
+                        name=ch['name'],
+                        online=ch['online'],
+                        last_data_at=datetime.utcnow()
+                    )
+                    db.session.add(channel)
+                    db.session.flush()
+                else:
+                    channel.online = ch['online']
+                    channel.last_data_at = datetime.utcnow()
 
-        db.session.commit()
-        
-        # 更新统计
-        with _tcp_stats_lock:
-            _tcp_stats['total_messages'] += 1
-            _tcp_stats['last_activity'] = datetime.utcnow()
-        
-        logger.info(f"Stored data for user {user_id}, device {device_name}")
+                for dp in ch['data_points']:
+                    data_point = DataPoint(
+                        channel_id=channel.id,
+                        name=dp['name'],
+                        value=dp['value']
+                    )
+                    db.session.add(data_point)
+
+            db.session.commit()
+            
+            # 更新统计
+            with _tcp_stats_lock:
+                _tcp_stats['total_messages'] += 1
+                _tcp_stats['last_activity'] = datetime.utcnow()
+            
+            logger.info(f"Stored data for user {user_id}, device {device_name}")
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Failed to store data for user {user_id}: {e}", exc_info=True)
+            raise
 
     def check_alarms(self, user_id, result):
         rules = AlarmRule.query.filter_by(user_id=user_id, enabled=True).all()

@@ -183,6 +183,29 @@ def upgrade_database():
         else:
             print("  ✅ login_logs 表已存在")
         
+        # ============ 6.5. 创建 tcp_logs 表 ============
+        print("\n🔍 检查 tcp_logs 表...")
+        
+        if not check_table_exists(cursor, 'tcp_logs'):
+            print("  ➕ 创建 tcp_logs 表")
+            cursor.execute("""
+                CREATE TABLE tcp_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    raw_data TEXT NOT NULL,
+                    parsed BOOLEAN DEFAULT 0,
+                    error_msg VARCHAR(500),
+                    client_ip VARCHAR(45),
+                    received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+        else:
+            print("  ✅ tcp_logs 表已存在")
+            if not check_column_exists(cursor, 'tcp_logs', 'client_ip'):
+                print("  ➕ 添加列 tcp_logs.client_ip")
+                cursor.execute("ALTER TABLE tcp_logs ADD COLUMN client_ip VARCHAR(45)")
+        
         # ============ 7. 创建 system_configs 表 ============
         print("\n🔍 检查 system_configs 表...")
         
