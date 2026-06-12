@@ -1,456 +1,438 @@
 /**
- * Dashboard - IoT 数据平台增强版仪表盘
+ * IoT Data Platform - Dashboard JavaScript
+ * 增强版数据看板，支持实时数据流、图表、统计
  */
 
-// 全局变量
-let trendChart = null;
-let realtimePaused = false;
-let dataStreamCount = 0;
-let lastDataId = 0;
+(function() {
+    'use strict';
 
-// 初始化
-$(document).ready(function() {
-    initDashboard();
-    initTrendChart();
-    initRealtimeStream();
-    initEventListeners();
-    
-    // 定时刷新统计数据
-    setInterval(refreshStats, 30000);
-});
+    // 全局变量
+    let trendChart = null;
+    let distributionChart = null;
+    let realtimePaused = false;
+    let dataStreamCount = 0;
+    let lastMinuteCount = 0;
+    let sseConnected = false;
 
-// 初始化仪表盘
-function initDashboard() {
-    refreshStats();
-    loadRecentAlarms();
-    loadDeviceStatus();
-    loadDeviceRanking();
-}
+    // 颜色配置
+    const colors = {
+        primary: '#0d6efd',
+        success: '#198754',
+        danger: '#dc3545',
+        warning: '#ffc107',
+        info: '#0dcaf0',
+        secondary: '#6c757d'
+    };
 
-// 刷新统计数据
-function refreshStats() {
-    $.get('/api/dashboard/stats')
-        .done(function(res) {
-            if (res.success) {
-                const data = res.data;
-                
-                // 设备统计
-                $('#statDevices').text(data.devices.total);
-                $('#statOnline').text(data.devices.online);
-                $('#statOffline').text(data.devices.offline);
-                
-                // 数据统计
-                $('#statToday').text(formatNumber(data.data_points.today));
-                
-                // 报警统计
-                $('#statAlarms').text(data.alarms.today);
-                
-                // 电压状态
-                updateVoltageStatus();
-            }
-        })
-        .fail(function(err) {
-            console.error('获取统计数据失败:', err);
-        });
-}
+    // 初始化图表
+    window.initCharts = function() {
+        initTrendChart();
+        initDistributionChart();
+    };
 
-// 初始化趋势图表
-function initTrendChart() {
-    const ctx = document.getElementById('trendChart');
-    if (!ctx) return;
-    
-    trendChart = new Chart(ctx.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '数据量',
-                data: [],
-                borderColor: '#3498db',
-                backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                fill: true,
-                tension: 0.4,
-                pointRadius: 2,
-                pointHoverRadius: 5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
+    // 初始化趋势图
+    function initTrendChart() {
+        const ctx = document.getElementById('trendChart');
+        if (!ctx) return;
+
+        trendChart = new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '数据量',
+                    data: [],
+                    borderColor: colors.primary,
+                    backgroundColor: colors.primary + '20',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 2,
+                    pointHoverRadius: 5
+                }]
             },
-            scales: {
-                x: {
-                    display: true,
-                    grid: {
-                        display: false
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { maxTicksLimit: 12 }
                     },
-                    ticks: {
-                        maxRotation: 0,
-                        autoSkip: true,
-                        maxTicksLimit: 12
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
                     }
                 },
-                y: {
-                    display: true,
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0,0,0,0.05)'
-                    }
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
                 }
+            }
+        });
+
+        // 加载初始数据
+        updateTrendChart('24h');
+    }
+
+    // 初始化分布图
+    function initDistributionChart() {
+        const ctx = document.getElementById('distributionChart');
+        if (!ctx) return;
+
+        distributionChart = new Chart(ctx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['在线设备', '离线设备', '告警设备'],
+                datasets: [{
+                    data: [0, 0, 0],
+                    backgroundColor: [colors.success, colors.danger, colors.warning],
+                    borderWidth: 0
+                }]
             },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { padding: 15, usePointStyle: true }
+                    }
+                },
+                cutout: '60%'
             }
-        }
-    });
-    
-    loadTrendData(24);
-}
-
-// 加载趋势数据
-function loadTrendData(hours) {
-    $.get('/api/dashboard/trend', { hours: hours })
-        .done(function(res) {
-            if (res.success && trendChart) {
-                const labels = res.data.map(d => d.time.split(' ')[1] || d.time);
-                const data = res.data.map(d => d.count);
-                
-                trendChart.data.labels = labels;
-                trendChart.data.datasets[0].data = data;
-                trendChart.update('none');
-            }
-        })
-        .fail(function(err) {
-            console.error('获取趋势数据失败:', err);
         });
-}
+    }
 
-// 初始化实时数据流
-function initRealtimeStream() {
-    // 先加载最近的数据
-    $.get('/api/dashboard/recent-data', { limit: 30 })
-        .done(function(res) {
-            if (res.success) {
-                const list = $('#realtimeDataList');
-                list.empty();
-                
-                res.data.reverse().forEach(function(item) {
-                    addDataItem(item, false);
-                    lastDataId = Math.max(lastDataId, item.id);
-                });
-            }
-        })
-        .fail(function(err) {
-            console.error('获取最近数据失败:', err);
+    // 加载看板统计数据
+    window.loadDashboardStats = function() {
+        apiRequest('/api/dashboard/stats').then(function(data) {
+            updateStatCards(data);
+            updateDeviceStatusList(data.devices || []);
+            updateAlarmList(data.recent_alarms || []);
+            updateDistributionChart(data);
+        }).catch(function(err) {
+            console.error('加载统计数据失败:', err);
         });
-    
-    // 启动SSE实时推送
-    startSSEStream();
-}
-
-// 启动SSE数据流
-function startSSEStream() {
-    const eventSource = new EventSource('/api/realtime/stream');
-    
-    eventSource.onopen = function() {
-        $('#sseStatus').html('<i class="bi bi-broadcast"></i> 实时连接中').removeClass('bg-danger').addClass('bg-success');
     };
-    
-    eventSource.onmessage = function(event) {
-        if (realtimePaused) return;
+
+    // 更新统计卡片
+    function updateStatCards(data) {
+        // 设备总数
+        animateNumber('statDevices', data.total_devices || 0);
         
-        try {
-            const msg = JSON.parse(event.data);
+        // 在线率
+        const onlineRate = data.total_devices > 0 
+            ? Math.round((data.online_devices || 0) / data.total_devices * 100) 
+            : 0;
+        document.getElementById('statOnlineRate').textContent = onlineRate + '%';
+        document.getElementById('statOnline').textContent = data.online_devices || 0;
+        document.getElementById('statTotal').textContent = data.total_devices || 0;
+        
+        // 今日数据
+        animateNumber('statTodayData', data.today_data_count || 0, true);
+        
+        // 今日报警
+        animateNumber('statTodayAlarms', data.today_alarm_count || 0);
+        
+        // 更新时间
+        document.getElementById('lastUpdateTime').innerHTML = 
+            '<i class="bi bi-clock"></i> ' + new Date().toLocaleTimeString();
+    }
+
+    // 数字动画
+    function animateNumber(elementId, targetValue, format) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        
+        const currentValue = parseInt(el.textContent.replace(/,/g, '')) || 0;
+        const diff = targetValue - currentValue;
+        const duration = 500;
+        const steps = 20;
+        const stepValue = diff / steps;
+        const stepTime = duration / steps;
+        
+        let current = currentValue;
+        let step = 0;
+        
+        const timer = setInterval(function() {
+            step++;
+            current += stepValue;
             
-            // 处理不同类型的消息
-            if (msg.type === 'connected') {
-                console.log('SSE已连接');
-            } else if (msg.type === 'heartbeat') {
-                // 心跳，忽略
-            } else if (msg.type === 'history' && msg.data) {
-                // 历史数据
-                processStreamData(msg.data, false);
-            } else if (msg.type === 'new_data' && msg.data) {
-                // 新数据推送
-                processStreamData(msg.data, true);
-            } else if (msg.id) {
-                // 兼容旧格式
-                addDataItem(msg, true);
-                dataStreamCount++;
-                updateStreamCount();
+            if (step >= steps) {
+                current = targetValue;
+                clearInterval(timer);
             }
-        } catch (e) {
-            console.error('SSE解析错误:', e);
-        }
-    };
-    
-    eventSource.onerror = function() {
-        $('#sseStatus').html('<i class="bi bi-broadcast"></i> 连接断开').removeClass('bg-success').addClass('bg-danger');
-        
-        // 5秒后重连
-        setTimeout(function() {
-            eventSource.close();
-            startSSEStream();
-        }, 5000);
-    };
-}
+            
+            el.textContent = format ? Math.round(current).toLocaleString() : Math.round(current);
+        }, stepTime);
+    }
 
-// 处理流数据
-function processStreamData(data, animate) {
-    if (!data || !data.channels) return;
-    
-    const deviceName = data.device_name || '-';
-    const timestamp = data.timestamp || new Date().toISOString();
-    
-    // 遍历所有通道的数据
-    data.channels.forEach(function(channel) {
-        const channelName = channel.name || '-';
+    // 更新设备状态列表
+    function updateDeviceStatusList(devices) {
+        const container = document.getElementById('deviceStatusList');
+        if (!container || !devices.length) {
+            if (container) container.innerHTML = '<div class="text-center text-muted py-4">暂无设备</div>';
+            return;
+        }
+
+        let html = '';
+        devices.slice(0, 6).forEach(function(device) {
+            const statusClass = device.is_online ? 'online' : 'offline';
+            const statusText = device.is_online ? '在线' : '离线';
+            
+            html += `
+                <div class="device-status-item">
+                    <div class="device-status-dot ${statusClass}"></div>
+                    <div class="flex-grow-1">
+                        <div class="fw-bold">${device.name || '未命名'}</div>
+                        <small class="text-muted">${device.channels_count || 0} 通道</small>
+                    </div>
+                    <span class="badge bg-${device.is_online ? 'success' : 'secondary'}">${statusText}</span>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // 更新报警列表
+    function updateAlarmList(alarms) {
+        const container = document.getElementById('recentAlarmList');
+        if (!container || !alarms.length) {
+            if (container) container.innerHTML = '<div class="text-center text-muted py-4">暂无报警</div>';
+            return;
+        }
+
+        let html = '';
+        alarms.slice(0, 5).forEach(function(alarm) {
+            const levelClass = alarm.level || 'info';
+            const icon = alarm.level === 'critical' ? 'exclamation-triangle' : 
+                        alarm.level === 'warning' ? 'exclamation-circle' : 'info-circle';
+            
+            html += `
+                <div class="alarm-item ${levelClass}">
+                    <div class="flex-grow-1">
+                        <div class="fw-bold">${alarm.title || alarm.message}</div>
+                        <small class="text-muted">${alarm.device_name || ''} • ${formatDateTime(alarm.timestamp)}</small>
+                    </div>
+                    <span class="badge bg-${levelClass === 'critical' ? 'danger' : levelClass === 'warning' ? 'warning' : 'info'}">
+                        ${alarm.level === 'critical' ? '严重' : alarm.level === 'warning' ? '警告' : '提示'}
+                    </span>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // 更新分布图
+    function updateDistributionChart(data) {
+        if (!distributionChart) return;
         
-        if (channel.data) {
-            // 遍历所有数据点
-            Object.keys(channel.data).forEach(function(key) {
-                const item = {
-                    device_name: deviceName,
-                    channel_name: channelName,
-                    data_key: key,
-                    data_value: channel.data[key],
-                    timestamp: timestamp
-                };
+        distributionChart.data.datasets[0].data = [
+            data.online_devices || 0,
+            (data.total_devices || 0) - (data.online_devices || 0),
+            data.alarm_devices || 0
+        ];
+        distributionChart.update();
+    }
+
+    // 更新趋势图
+    window.updateTrendChart = function(period) {
+        if (!trendChart) return;
+        
+        const deviceId = document.getElementById('chartDevice')?.value || 'all';
+        
+        apiRequest('/api/dashboard/trend?period=' + (period || '24h') + '&device_id=' + deviceId)
+            .then(function(data) {
+                if (!data.labels || !data.values) return;
                 
-                addDataItem(item, animate);
+                trendChart.data.labels = data.labels;
+                trendChart.data.datasets[0].data = data.values;
+                trendChart.update();
+            })
+            .catch(function(err) {
+                console.error('加载趋势数据失败:', err);
+            });
+    };
+
+    // 加载设备选项
+    window.loadDeviceOptions = function() {
+        apiRequest('/api/devices').then(function(data) {
+            const select = document.getElementById('chartDevice');
+            if (!select || !data.devices) return;
+            
+            select.innerHTML = '<option value="all">所有设备</option>';
+            data.devices.forEach(function(device) {
+                select.innerHTML += `<option value="${device.id}">${device.name}</option>`;
+            });
+        });
+    };
+
+    // 启动SSE数据流
+    window.startSSEStream = function() {
+        const eventSource = new EventSource('/api/realtime/stream');
+        
+        eventSource.onopen = function() {
+            sseConnected = true;
+            $('#sseStatus').html('<i class="bi bi-broadcast"></i> 实时连接中')
+                .removeClass('bg-danger bg-secondary').addClass('bg-success');
+        };
+        
+        eventSource.onmessage = function(event) {
+            if (realtimePaused) return;
+            
+            try {
+                const msg = JSON.parse(event.data);
                 
-                if (animate) {
+                if (msg.type === 'connected') {
+                    console.log('SSE已连接:', msg.message);
+                } else if (msg.type === 'heartbeat') {
+                    // 心跳
+                } else if (msg.type === 'history' && msg.data) {
+                    processStreamData(msg.data, false);
+                } else if (msg.type === 'new_data' && msg.data) {
+                    processStreamData(msg.data, true);
+                    dataStreamCount++;
+                    updateStreamCount();
+                } else if (msg.device_name) {
+                    // 兼容旧格式
+                    addDataItem(msg, true);
                     dataStreamCount++;
                     updateStreamCount();
                 }
-            });
-        }
-    });
-}
+            } catch (e) {
+                console.error('SSE解析错误:', e);
+            }
+        };
+        
+        eventSource.onerror = function() {
+            sseConnected = false;
+            $('#sseStatus').html('<i class="bi bi-broadcast"></i> 断开重连中')
+                .removeClass('bg-success').addClass('bg-danger');
+            
+            setTimeout(function() {
+                eventSource.close();
+                startSSEStream();
+            }, 5000);
+        };
+    };
 
-// 添加数据项到实时列表
-function addDataItem(item, animate) {
-    const list = $('#realtimeDataList');
-    
-    const itemHtml = `
-        <li class="list-group-item data-stream-item ${animate ? 'new-item' : ''}" style="font-size: 0.8rem;">
-            <div class="d-flex justify-content-between align-items-center">
+    // 处理流数据
+    function processStreamData(data, animate) {
+        if (!data || !data.channels) return;
+        
+        const deviceName = data.device_name || '-';
+        const timestamp = data.timestamp || new Date().toISOString();
+        
+        data.channels.forEach(function(channel) {
+            const channelName = channel.name || '-';
+            
+            if (channel.data) {
+                Object.keys(channel.data).forEach(function(key) {
+                    const item = {
+                        device_name: deviceName,
+                        channel_name: channelName,
+                        data_key: key,
+                        data_value: channel.data[key],
+                        timestamp: timestamp
+                    };
+                    
+                    addDataItem(item, animate);
+                });
+            }
+        });
+    }
+
+    // 添加数据项到列表
+    function addDataItem(item, animate) {
+        const container = document.getElementById('realtimeDataList');
+        if (!container) return;
+        
+        // 清除"等待数据"提示
+        if (container.querySelector('.text-muted')) {
+            container.innerHTML = '';
+        }
+        
+        const itemHtml = `
+            <div class="data-stream-item ${animate ? 'new-item' : ''}">
                 <div>
-                    <span class="badge bg-secondary me-1">${item.device_name || '-'}</span>
-                    <span class="text-muted">${item.channel_name || '-'}</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary">${item.device_name}</span>
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary ms-1">${item.channel_name}</span>
+                    <span class="text-muted ms-1">${item.data_key}</span>
                 </div>
-                <small class="text-muted">${item.timestamp ? item.timestamp.split(' ')[1] || item.timestamp : ''}</small>
+                <div>
+                    <strong class="text-success">${formatNumber(item.data_value, 4)}</strong>
+                    <small class="text-muted ms-2">${formatTime(item.timestamp)}</small>
+                </div>
             </div>
-            <div class="mt-1">
-                <strong>${item.data_key}:</strong> 
-                <span class="text-primary">${formatValue(item.data_value)}</span>
-            </div>
-        </li>
-    `;
-    
-    if (animate) {
-        list.prepend(itemHtml);
+        `;
         
-        // 移除动画类
-        setTimeout(function() {
-            list.find('.new-item').removeClass('new-item');
-        }, 500);
+        container.insertAdjacentHTML('afterbegin', itemHtml);
         
-        // 限制列表长度
-        while (list.children().length > 50) {
-            list.children().last().remove();
+        // 保持最多50条
+        while (container.children.length > 50) {
+            container.removeChild(container.lastChild);
         }
-    } else {
-        list.append(itemHtml);
     }
-}
 
-// 更新电压状态
-function updateVoltageStatus() {
-    $.get('/api/devices')
-        .done(function(res) {
-            if (res.success && res.data && res.data.length > 0) {
-                // 找最新的电压值
-                let minVoltage = Infinity;
-                res.data.forEach(function(device) {
-                    if (device.voltage_mv && device.voltage_mv < minVoltage) {
-                        minVoltage = device.voltage_mv;
-                    }
-                });
-                
-                if (minVoltage !== Infinity) {
-                    const voltageStatus = minVoltage < 3000 ? '偏低' : (minVoltage < 3500 ? '正常' : '良好');
-                    const voltageClass = minVoltage < 3000 ? 'text-warning' : 'text-success';
-                    $('#statVoltage').html(`<span class="${voltageClass}">${minVoltage}mV</span>`);
-                }
-            }
-        });
-}
+    // 更新流计数
+    function updateStreamCount() {
+        const el = document.getElementById('streamCount');
+        if (el) {
+            el.textContent = dataStreamCount + ' 条/分钟';
+        }
+    }
 
-// 加载最近报警
-function loadRecentAlarms() {
-    $.get('/api/dashboard/recent-alarms', { limit: 5 })
-        .done(function(res) {
-            if (res.success) {
-                const list = $('#recentAlarmList');
-                list.empty();
-                
-                if (res.data.length === 0) {
-                    list.html('<li class="list-group-item text-center text-muted py-4">暂无报警</li>');
-                    return;
-                }
-                
-                res.data.forEach(function(alarm) {
-                    const levelClass = {
-                        'critical': 'danger',
-                        'warning': 'warning',
-                        'info': 'info'
-                    }[alarm.alarm_level] || 'secondary';
-                    
-                    const iconClass = {
-                        'voltage': 'bi-lightning',
-                        'offline': 'bi-wifi-off',
-                        'data': 'bi-exclamation-triangle',
-                        'threshold': 'bi-speedometer'
-                    }[alarm.alarm_type] || 'bi-bell';
-                    
-                    list.append(`
-                        <li class="list-group-item alarm-item">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <span class="badge bg-${levelClass} me-2"><i class="bi ${iconClass}"></i></span>
-                                    <strong>${alarm.device_name || '未知设备'}</strong>
-                                    <p class="mb-0 small text-muted">${alarm.message}</p>
-                                </div>
-                                <small class="text-muted">${formatTime(alarm.created_at)}</small>
-                            </div>
-                        </li>
-                    `);
-                });
-            }
-        })
-        .fail(function(err) {
-            console.error('获取报警失败:', err);
-        });
-}
-
-// 加载设备状态
-function loadDeviceStatus() {
-    $.get('/api/devices')
-        .done(function(res) {
-            if (res.success) {
-                const list = $('#deviceStatusList');
-                list.empty();
-                
-                if (res.data.length === 0) {
-                    list.html('<li class="list-group-item text-center text-muted py-4">暂无设备</li>');
-                    return;
-                }
-                
-                // 只显示前5个
-                const devices = res.data.slice(0, 5);
-                
-                devices.forEach(function(device) {
-                    const statusClass = device.is_online ? 'success' : 'danger';
-                    const statusText = device.is_online ? '在线' : '离线';
-                    
-                    list.append(`
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="badge bg-${statusClass} badge-online me-2">${statusText}</span>
-                                <strong>${device.name}</strong>
-                            </div>
-                            <div>
-                                ${device.voltage_mv ? `<small class="text-muted me-2">${device.voltage_mv}mV</small>` : ''}
-                                <small class="text-muted">${device.channel_count || 0} 通道</small>
-                            </div>
-                        </li>
-                    `);
-                });
-            }
-        })
-        .fail(function(err) {
-            console.error('获取设备状态失败:', err);
-        });
-}
-
-// 加载设备排行
-function loadDeviceRanking() {
-    $.get('/api/dashboard/device-ranking', { limit: 5 })
-        .done(function(res) {
-            if (res.success) {
-                // 可以在需要的地方显示
-            }
-        });
-}
-
-// 更新数据流计数
-function updateStreamCount() {
-    // 可以在页面上显示每分钟数据量
-}
-
-// 初始化事件监听
-function initEventListeners() {
-    // 图表时间范围切换
-    $('#chartPeriod').on('change', function() {
-        const period = $(this).val();
-        const hours = {
-            '24h': 24,
-            '7d': 24 * 7,
-            '30d': 24 * 30
-        }[period] || 24;
-        
-        loadTrendData(hours);
-    });
-    
-    // 暂停/恢复实时数据
-    $('#pauseStream').on('click', function() {
+    // 切换实时流暂停
+    window.toggleRealtimeStream = function() {
         realtimePaused = !realtimePaused;
-        $(this).html(realtimePaused ? '<i class="bi bi-play-fill"></i>' : '<i class="bi bi-pause-fill"></i>');
-        $(this).toggleClass('btn-warning', realtimePaused).toggleClass('btn-outline-secondary', !realtimePaused);
-    });
-}
+        const btn = document.getElementById('toggleStream');
+        if (btn) {
+            btn.innerHTML = realtimePaused 
+                ? '<i class="bi bi-play-fill"></i>' 
+                : '<i class="bi bi-pause-fill"></i>';
+            btn.title = realtimePaused ? '继续' : '暂停';
+        }
+    };
 
-// 格式化数字
-function formatNumber(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
+    // 辅助函数
+    function formatNumber(num, decimals) {
+        if (num === null || num === undefined) return '-';
+        return Number(num).toFixed(decimals || 2);
     }
-    return num.toString();
-}
 
-// 格式化值
-function formatValue(val) {
-    if (val === null || val === undefined) return '-';
-    const num = parseFloat(val);
-    return isNaN(num) ? val : num.toFixed(4);
-}
+    function formatTime(timestamp) {
+        if (!timestamp) return '-';
+        const date = new Date(timestamp);
+        return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
 
-// 格式化时间
-function formatTime(timeStr) {
-    if (!timeStr) return '';
-    const parts = timeStr.split(' ');
-    return parts.length > 1 ? parts[1] : parts[0];
-}
+    function formatDateTime(timestamp) {
+        if (!timestamp) return '-';
+        const date = new Date(timestamp);
+        return date.toLocaleString('zh-CN');
+    }
 
-// 显示加载状态
-function showLoading(selector) {
-    $(selector).html('<div class="text-center py-3"><div class="loading-spinner"></div></div>');
-}
+    function apiRequest(url) {
+        return fetch(url, { headers: { 'Accept': 'application/json' } })
+            .then(function(response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success === false) throw new Error(data.message || '请求失败');
+                return data;
+            });
+    }
 
-// 显示错误
-function showError(selector, message) {
-    $(selector).html(`<div class="text-center text-danger py-3"><i class="bi bi-exclamation-circle"></i> ${message}</div>`);
-}
+    // 每分钟重置计数
+    setInterval(function() {
+        lastMinuteCount = dataStreamCount;
+        dataStreamCount = 0;
+    }, 60000);
+
+})();

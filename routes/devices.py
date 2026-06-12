@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
+from datetime import datetime, timedelta
+from sqlalchemy import func
 
-from models.database import db, Device
+from models.database import db, Device, SlaveChannel, DataPoint
 
 devices_bp = Blueprint('devices', __name__, url_prefix='/api/devices')
 
@@ -109,3 +111,168 @@ def set_location(device_id):
 
     db.session.commit()
     return jsonify({'success': True, 'device': device.to_dict()})
+
+
+@devices_bp.route('/<int:device_id>', methods=['GET'])
+@login_required
+def get_device(device_id):
+    """获取设备详情"""
+    device = Device.query.filter_by(id=device_id, user_id=current_user.id).first()
+    if not device:
+        return jsonify({'success': False, 'message': 'Device not found'}), 404
+
+    # 获取通道信息
+    channels = SlaveChannel.query.filter_by(device_id=device.id).all()
+    channels_data = []
+    
+    for channel in channels:
+        # 获取最新数据点
+        latest_data = DataPoint.query.filter_by(channel_id=channel.id)\
+            .order_by(DataPoint.timestamp.desc()).first()
+        
+        channels_data.append({
+            'id': channel.id,
+            'name': channel.name,
+            'online': channel.online,
+            'data_points_count': DataPoint.query.filter_by(channel_id=channel.id).count(),
+            'latest_data': latest_data.to_dict() if latest_data else None
+        })
+
+    # 获取今日数据量
+    today = datetime.utcnow().date()
+    today_start = datetime.combine(today, datetime.min.time())
+    today_count = db.session.query(func.count(DataPoint.id))\
+        .join(SlaveChannel)\
+        .filter(SlaveChannel.device_id == device.id)\
+        .filter(DataPoint.timestamp >= today_start)\
+        .scalar() or 0
+
+    return jsonify({
+        'success': True,
+        'device': device.to_dict(),
+        'channels': channels_data,
+        'stats': {
+            'channels_count': len(channels),
+            'online_channels': sum(1 for c in channels if c.online),
+            'today_data_count': today_count
+        }
+    })
+
+
+@devices_bp.route('/<int:device_id>/data', methods=['GET'])
+@login_required
+def get_device_data(device_id):
+    """获取设备历史数据"""
+    device = Device.query.filter_by(id=device_id, user_id=current_user.id).first()
+    if not device:
+        return jsonify({'success': False, 'message': 'Device not found'}), 404
+
+    # 获取参数
+    hours = request.args.get('hours', 24, type=int)
+    limit = request.args.get('limit', 1000, type=int)
+    channel_id = request.args.get('channel_id', type=int)
+
+    # 计算时间范围
+    start_time = datetime.utcnow() - timedelta(hours=hours)
+
+    # 查询数据
+    query = db.session.query(DataPoint, SlaveChannel.name)\
+        .join(SlaveChannel)\
+        .filter(SlaveChannel.device_id == device.id)\
+        .filter(DataPoint.timestamp >= start_time)
+
+    if channel_id:
+        query = query.filter(DataPoint.channel_id == channel_id)
+
+    query = query.order_by(DataPoint.timestamp.desc()).limit(limit)
+
+    results = query.all()
+
+    data = []
+    for dp, channel_name in results:
+        data.append({
+            'id': dp.id,
+            'channel_name': channel_name,
+            'data_key': dp.data_key,
+            'data_value': dp.data_value,
+            'timestamp': dp.timestamp.isoformat() if dp.timestamp else None
+        })
+
+    return jsonify({
+        'success': True,
+        'device_id': device_id,
+        'data': data,
+        'count': len(data)
+    })
+
+
+@devices_bp.route('/<int:device_id>/stats', methods=['GET'])
+@login_required
+def get_device_stats(device_id):
+    """获取设备统计数据"""
+    device = Device.query.filter_by(id=device_id, user_id=current_user.id).first()
+    if not device:
+        return jsonify({'success': False, 'message': 'Device not found'}), 404
+
+    # 时间范围
+    hours = request.args.get('hours', 24, type=int)
+    start_time = datetime.utcnow() - timedelta(hours=hours)
+
+    # 按小时统计数据量
+    hourly_stats = db.session.query(
+        func.strftime('%Y-%m-%d %H:00', DataPoint.timestamp).label('hour'),
+        func.count(DataPoint.id).label('count')
+    ).join(SlaveChannel)\
+     .filter(SlaveChannel.device_id == device.id)\
+     .filter(DataPoint.timestamp >= start_time)\
+     .group_by('hour')\
+     .order_by('hour')\
+     .all()
+
+    return jsonify({
+        'success': True,
+        'hourly_stats': [{'time': h, 'count': c} for h, c in hourly_stats]
+    })
+
+
+@devices_bp.route('/batch-delete', methods=['POST'])
+@login_required
+def batch_delete_devices():
+    """批量删除设备"""
+    data = request.get_json()
+    if not data or 'ids' not in data:
+        return jsonify({'success': False, 'message': 'Missing device IDs'}), 400
+
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'success': False, 'message': 'No device IDs provided'}), 400
+
+    deleted = 0
+    for device_id in ids:
+        device = Device.query.filter_by(id=device_id, user_id=current_user.id).first()
+        if device:
+            db.session.delete(device)
+            deleted += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'Deleted {deleted} devices',
+        'deleted_count': deleted
+    })
+
+
+@devices_bp.route('/with-location', methods=['GET'])
+@login_required
+def get_devices_with_location():
+    """获取有位置的设备列表（用于地图）"""
+    devices = Device.query.filter_by(user_id=current_user.id)\
+        .filter(Device.latitude.isnot(None))\
+        .filter(Device.longitude.isnot(None))\
+        .all()
+
+    return jsonify({
+        'success': True,
+        'devices': [d.to_dict() for d in devices]
+    })
