@@ -109,11 +109,14 @@ def upgrade_database():
         
         new_device_columns = [
             ('project_id', 'INTEGER REFERENCES projects(id)'),
+            ('group_id', 'INTEGER REFERENCES device_groups(id)'),
+            ('device_type', 'VARCHAR(32)'),
             ('device_key', 'VARCHAR(64)'),
             ('firmware_version', 'VARCHAR(32)'),
             ('ip_address', 'VARCHAR(45)'),
             ('last_seen_at', 'DATETIME'),
             ('is_online', 'BOOLEAN DEFAULT 0'),
+            ('storage_enabled', 'BOOLEAN DEFAULT 1'),
             ('last_maintenance_at', 'DATETIME'),
             ('maintenance_interval', 'INTEGER DEFAULT 30'),
             ('location_name', 'VARCHAR(128)'),
