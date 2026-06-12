@@ -13,7 +13,7 @@ from collections import deque
 from flask import Blueprint, Response, stream_with_context, request, jsonify
 from flask_login import login_required, current_user
 
-from models.database import db, Device, Channel, DataPoint, AlarmLog
+from models.database import db, Device, SlaveChannel, DataPoint, AlarmRecord
 
 realtime_bp = Blueprint('realtime', __name__, url_prefix='/api/realtime')
 
@@ -161,7 +161,7 @@ def stats():
     
     # 通道统计
     device_ids = [d.id for d in devices]
-    channels = Channel.query.filter(Channel.device_id.in_(device_ids)).all() if device_ids else []
+    channels = SlaveChannel.query.filter(SlaveChannel.device_id.in_(device_ids)).all() if device_ids else []
     total_channels = len(channels)
     online_channels = sum(1 for c in channels if c.online)
     
@@ -173,10 +173,10 @@ def stats():
     ).count() if channels else 0
     
     # 今日报警数
-    alarm_count = AlarmLog.query.filter(
-        AlarmLog.device_id.in_(device_ids) if device_ids else False,
-        AlarmLog.created_at >= today
-    ).count() if device_ids else 0
+    alarm_count = AlarmRecord.query.filter(
+        AlarmRecord.user_id == user_id,
+        AlarmRecord.created_at >= today
+    ).count()
     
     # 数据速率（最近1分钟）
     one_min_ago = datetime.now() - timedelta(minutes=1)

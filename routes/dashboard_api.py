@@ -16,7 +16,7 @@ dashboard_bp = Blueprint('dashboard_api', __name__)
 @login_required
 def get_stats():
     """获取仪表盘统计数据"""
-    from models.database import db, Device, SlaveChannel, DataPoint, Alarm, User
+    from models.database import db, Device, SlaveChannel, DataPoint, AlarmRecord, User
     
     try:
         # 设备统计
@@ -47,16 +47,15 @@ def get_stats():
         
         # 报警统计
         if current_user.is_admin:
-            total_alarms = Alarm.query.filter_by(is_read=False).count()
-            today_alarms = Alarm.query.filter(
-                Alarm.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
+            total_alarms = AlarmRecord.query.filter_by(is_read=False).count()
+            today_alarms = AlarmRecord.query.filter(
+                AlarmRecord.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
             ).count()
         else:
-            device_ids = [d.id for d in Device.query.filter_by(user_id=current_user.id).all()]
-            total_alarms = Alarm.query.filter(Alarm.device_id.in_(device_ids), Alarm.is_read == False).count()
-            today_alarms = Alarm.query.filter(
-                Alarm.device_id.in_(device_ids),
-                Alarm.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
+            total_alarms = AlarmRecord.query.filter_by(user_id=current_user.id, is_read=False).count()
+            today_alarms = AlarmRecord.query.filter(
+                AlarmRecord.user_id == current_user.id,
+                AlarmRecord.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
             ).count()
         
         # 用户统计（仅管理员）
