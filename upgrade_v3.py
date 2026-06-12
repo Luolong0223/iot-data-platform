@@ -1,117 +1,213 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-数据库升级脚本 - 用于从 v2.0 升级到 v3.0
-执行方式：python upgrade_v3.py
+IoT 数据平台 v3.0 数据库升级脚本
+用于从 v1.x/v2.x 升级到 v3.0
 """
 
 import os
 import sys
+import sqlite3
 
-# 添加项目根目录到路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+def get_db_path():
+    """获取数据库路径"""
+    # 从配置中读取
+    db_path = 'data.sqlite'
+    return db_path
 
-from app import create_app
-from models.database import db
+def check_column_exists(cursor, table, column):
+    """检查列是否存在"""
+    cursor.execute(f"PRAGMA table_info({table})")
+    columns = [row[1] for row in cursor.fetchall()]
+    return column in columns
+
+def check_table_exists(cursor, table):
+    """检查表是否存在"""
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+    return cursor.fetchone() is not None
 
 def upgrade_database():
-    """升级数据库结构"""
-    app = create_app()
+    """执行数据库升级"""
+    db_path = get_db_path()
     
-    with app.app_context():
-        print("=" * 50)
-        print("IoT 数据平台 v3.0 数据库升级脚本")
-        print("=" * 50)
-        
-        # 1. 创建新表
-        print("\n[1/4] 创建新数据表...")
-        try:
-            # 导入所有模型确保它们被注册
-            from models.database import DeviceGroup, LoginLog, SystemConfig
-            
-            # 创建所有表（如果不存在）
-            db.create_all()
-            print("✓ 新数据表创建成功")
-        except Exception as e:
-            print(f"✗ 创建数据表失败: {e}")
-            return False
-        
-        # 2. 为 Device 表添加新字段（如果不存在）
-        print("\n[2/4] 检查 Device 表结构...")
-        try:
-            # 检查 is_online 字段是否存在
-            result = db.session.execute(db.text("PRAGMA table_info(device)"))
-            columns = [row[1] for row in result.fetchall()]
-            
-            if 'is_online' not in columns:
-                print("  添加 is_online 字段...")
-                db.session.execute(db.text("ALTER TABLE device ADD COLUMN is_online BOOLEAN DEFAULT 0"))
-            
-            if 'last_seen_at' not in columns:
-                print("  添加 last_seen_at 字段...")
-                db.session.execute(db.text("ALTER TABLE device ADD COLUMN last_seen_at DATETIME"))
-            
-            db.session.commit()
-            print("✓ Device 表结构更新成功")
-        except Exception as e:
-            print(f"! Device 表检查跳过 (可能是 MySQL): {e}")
-        
-        # 3. 创建索引
-        print("\n[3/4] 创建数据库索引...")
-        try:
-            # SQLite 创建索引
-            indexes = [
-                "CREATE INDEX IF NOT EXISTS idx_device_user_id ON device(user_id)",
-                "CREATE INDEX IF NOT EXISTS idx_device_is_online ON device(is_online)",
-                "CREATE INDEX IF NOT EXISTS idx_channel_device_id ON slave_channel(device_id)",
-                "CREATE INDEX IF NOT EXISTS idx_datapoint_channel_id ON data_point(channel_id)",
-                "CREATE INDEX IF NOT EXISTS idx_datapoint_timestamp ON data_point(timestamp)",
-                "CREATE INDEX IF NOT EXISTS idx_alarm_user_id ON alarm_record(user_id)",
-                "CREATE INDEX IF NOT EXISTS idx_alarm_is_read ON alarm_record(is_read)",
-                "CREATE INDEX IF NOT EXISTS idx_tcp_log_user_id ON tcp_log(user_id)",
-                "CREATE INDEX IF NOT EXISTS idx_login_log_user_id ON login_log(user_id)",
-                "CREATE INDEX IF NOT EXISTS idx_login_log_created_at ON login_log(created_at)",
-            ]
-            
-            for idx_sql in indexes:
-                try:
-                    db.session.execute(db.text(idx_sql))
-                except Exception as idx_err:
-                    # 索引可能已存在，忽略错误
-                    pass
-            
-            db.session.commit()
-            print("✓ 数据库索引创建成功")
-        except Exception as e:
-            print(f"! 索引创建部分失败: {e}")
-        
-        # 4. 验证升级结果
-        print("\n[4/4] 验证升级结果...")
-        try:
-            # 检查表是否存在
-            tables = ['device_group', 'login_log', 'system_config']
-            for table in tables:
-                result = db.session.execute(db.text(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"))
-                if result.fetchone():
-                    print(f"  ✓ {table} 表已创建")
-                else:
-                    print(f"  ! {table} 表未找到")
-            
-            print("\n" + "=" * 50)
-            print("✓ 数据库升级完成！")
-            print("=" * 50)
-            
-        except Exception as e:
-            print(f"验证失败: {e}")
-        
-        return True
-
-
-if __name__ == '__main__':
+    if not os.path.exists(db_path):
+        print(f"❌ 数据库文件不存在: {db_path}")
+        print("请确保数据库文件存在后再运行此脚本")
+        return False
+    
+    print(f"📦 数据库文件: {db_path}")
+    
+    # 连接数据库
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
     try:
-        upgrade_database()
+        # ========== 1. 升级 users 表 ==========
+        print("\n🔍 检查 users 表...")
+        
+        # 需要添加的新列
+        new_user_columns = [
+            ('email', 'VARCHAR(120)'),
+            ('is_active', 'BOOLEAN DEFAULT 1'),
+            ('last_login_at', 'DATETIME'),
+            ('last_login_ip', 'VARCHAR(45)'),
+            ('failed_login_count', 'INTEGER DEFAULT 0'),
+            ('locked_until', 'DATETIME'),
+        ]
+        
+        for column, col_type in new_user_columns:
+            if not check_column_exists(cursor, 'users', column):
+                print(f"  ➕ 添加列 users.{column}")
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {column} {col_type}")
+            else:
+                print(f"  ✅ users.{column} 已存在")
+        
+        # 为已存在的用户设置默认邮箱
+        cursor.execute("UPDATE users SET email = username || '@example.com' WHERE email IS NULL OR email = ''")
+        
+        # ========== 2. 创建设备分组表 ==========
+        print("\n🔍 检查 device_groups 表...")
+        
+        if not check_table_exists(cursor, 'device_groups'):
+            print("  ➕ 创建 device_groups 表")
+            cursor.execute("""
+                CREATE TABLE device_groups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(64) NOT NULL,
+                    description TEXT,
+                    color VARCHAR(20) DEFAULT '#3498db',
+                    user_id INTEGER NOT NULL,
+                    sort_order INTEGER DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+        else:
+            print("  ✅ device_groups 表已存在")
+        
+        # ========== 3. 为 devices 表添加分组字段 ==========
+        print("\n🔍 检查 devices 表...")
+        
+        if not check_column_exists(cursor, 'devices', 'group_id'):
+            print("  ➕ 添加列 devices.group_id")
+            cursor.execute("ALTER TABLE devices ADD COLUMN group_id INTEGER REFERENCES device_groups(id)")
+        else:
+            print("  ✅ devices.group_id 已存在")
+        
+        if not check_column_exists(cursor, 'devices', 'is_online'):
+            print("  ➕ 添加列 devices.is_online")
+            cursor.execute("ALTER TABLE devices ADD COLUMN is_online BOOLEAN DEFAULT 0")
+        else:
+            print("  ✅ devices.is_online 已存在")
+        
+        if not check_column_exists(cursor, 'devices', 'last_seen_at'):
+            print("  ➕ 添加列 devices.last_seen_at")
+            cursor.execute("ALTER TABLE devices ADD COLUMN last_seen_at DATETIME")
+        else:
+            print("  ✅ devices.last_seen_at 已存在")
+        
+        # ========== 4. 创建登录日志表 ==========
+        print("\n🔍 检查 login_logs 表...")
+        
+        if not check_table_exists(cursor, 'login_logs'):
+            print("  ➕ 创建 login_logs 表")
+            cursor.execute("""
+                CREATE TABLE login_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    username VARCHAR(64),
+                    login_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    ip_address VARCHAR(45),
+                    user_agent TEXT,
+                    success BOOLEAN DEFAULT 1,
+                    failure_reason VARCHAR(255),
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+        else:
+            print("  ✅ login_logs 表已存在")
+        
+        # ========== 5. 创建系统配置表 ==========
+        print("\n🔍 检查 system_configs 表...")
+        
+        if not check_table_exists(cursor, 'system_configs'):
+            print("  ➕ 创建 system_configs 表")
+            cursor.execute("""
+                CREATE TABLE system_configs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key VARCHAR(64) UNIQUE NOT NULL,
+                    value TEXT,
+                    description TEXT,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # 插入默认配置
+            default_configs = [
+                ('site_name', 'IoT 数据平台', '网站名称'),
+                ('tcp_base_port', '9000', 'TCP基础端口'),
+                ('max_login_attempts', '5', '最大登录尝试次数'),
+                ('login_lockout_minutes', '5', '登录锁定分钟数'),
+            ]
+            cursor.executemany(
+                "INSERT INTO system_configs (key, value, description) VALUES (?, ?, ?)",
+                default_configs
+            )
+        else:
+            print("  ✅ system_configs 表已存在")
+        
+        # ========== 6. 创建索引 ==========
+        print("\n🔍 创建索引...")
+        
+        indexes = [
+            ('idx_users_username', 'users(username)'),
+            ('idx_users_email', 'users(email)'),
+            ('idx_devices_user_id', 'devices(user_id)'),
+            ('idx_devices_group_id', 'devices(group_id)'),
+            ('idx_devices_is_online', 'devices(is_online)'),
+            ('idx_channels_device_id', 'channels(device_id)'),
+            ('idx_data_points_channel_id', 'data_points(channel_id)'),
+            ('idx_data_points_timestamp', 'data_points(timestamp)'),
+            ('idx_device_groups_user_id', 'device_groups(user_id)'),
+            ('idx_login_logs_user_id', 'login_logs(user_id)'),
+            ('idx_login_logs_login_time', 'login_logs(login_time)'),
+        ]
+        
+        for idx_name, idx_def in indexes:
+            try:
+                cursor.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {idx_def}")
+                print(f"  ✅ 索引 {idx_name}")
+            except Exception as e:
+                print(f"  ⚠️ 索引 {idx_name}: {e}")
+        
+        # 提交更改
+        conn.commit()
+        print("\n✅ 数据库升级完成！")
+        return True
+        
     except Exception as e:
-        print(f"\n升级失败: {e}")
+        conn.rollback()
+        print(f"\n❌ 升级失败: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1)
+        return False
+    finally:
+        conn.close()
+
+if __name__ == '__main__':
+    print("=" * 50)
+    print("IoT 数据平台 v3.0 数据库升级工具")
+    print("=" * 50)
+    
+    # 备份提醒
+    print("\n⚠️  重要提醒：请确保已备份数据库文件！")
+    print("   备份命令: cp data.sqlite data.sqlite.backup")
+    
+    response = input("\n是否继续升级？(y/n): ")
+    if response.lower() != 'y':
+        print("❌ 升级已取消")
+        sys.exit(0)
+    
+    success = upgrade_database()
+    sys.exit(0 if success else 1)
