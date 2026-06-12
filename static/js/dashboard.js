@@ -170,14 +170,27 @@ function startSSEStream() {
         if (realtimePaused) return;
         
         try {
-            const data = JSON.parse(event.data);
-            if (data && data.id) {
-                addDataItem(data, true);
+            const msg = JSON.parse(event.data);
+            
+            // 处理不同类型的消息
+            if (msg.type === 'connected') {
+                console.log('SSE已连接');
+            } else if (msg.type === 'heartbeat') {
+                // 心跳，忽略
+            } else if (msg.type === 'history' && msg.data) {
+                // 历史数据
+                processStreamData(msg.data, false);
+            } else if (msg.type === 'new_data' && msg.data) {
+                // 新数据推送
+                processStreamData(msg.data, true);
+            } else if (msg.id) {
+                // 兼容旧格式
+                addDataItem(msg, true);
                 dataStreamCount++;
                 updateStreamCount();
             }
         } catch (e) {
-            // 忽略解析错误
+            console.error('SSE解析错误:', e);
         }
     };
     
@@ -190,6 +203,39 @@ function startSSEStream() {
             startSSEStream();
         }, 5000);
     };
+}
+
+// 处理流数据
+function processStreamData(data, animate) {
+    if (!data || !data.channels) return;
+    
+    const deviceName = data.device_name || '-';
+    const timestamp = data.timestamp || new Date().toISOString();
+    
+    // 遍历所有通道的数据
+    data.channels.forEach(function(channel) {
+        const channelName = channel.name || '-';
+        
+        if (channel.data) {
+            // 遍历所有数据点
+            Object.keys(channel.data).forEach(function(key) {
+                const item = {
+                    device_name: deviceName,
+                    channel_name: channelName,
+                    data_key: key,
+                    data_value: channel.data[key],
+                    timestamp: timestamp
+                };
+                
+                addDataItem(item, animate);
+                
+                if (animate) {
+                    dataStreamCount++;
+                    updateStreamCount();
+                }
+            });
+        }
+    });
 }
 
 // 添加数据项到实时列表
