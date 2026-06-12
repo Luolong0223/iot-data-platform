@@ -22,6 +22,14 @@ logger.addHandler(file_handler)
 _sse_clients = []
 _sse_lock = threading.Lock()
 
+# TCP 状态跟踪
+_tcp_stats = {
+    'total_connections': 0,
+    'total_messages': 0,
+    'last_activity': None
+}
+_tcp_stats_lock = threading.Lock()
+
 
 def register_sse_client():
     event = threading.Event()
@@ -43,6 +51,28 @@ def notify_sse_clients(data):
         for client in _sse_clients:
             client['queue'].append(data)
             client['event'].set()
+
+
+def get_tcp_status():
+    """获取TCP服务器状态"""
+    from tcp_server import servers
+    
+    with _tcp_stats_lock:
+        stats = _tcp_stats.copy()
+    
+    return {
+        'running': len(servers) > 0,
+        'active_ports': list(servers.keys()),
+        'total_connections': stats['total_connections'],
+        'total_messages': stats['total_messages'],
+        'last_activity': stats['last_activity'].isoformat() if stats['last_activity'] else None
+    }
+
+
+def get_sse_client_count():
+    """获取SSE客户端数量"""
+    with _sse_lock:
+        return len(_sse_clients)
 
 
 class TcpConnectionHandler:
@@ -129,13 +159,17 @@ class TcpConnectionHandler:
             device = Device(
                 user_id=user_id,
                 name=device_name,
-                voltage_mv=voltage_mv
+                voltage_mv=voltage_mv,
+                is_online=True,
+                last_seen_at=datetime.utcnow()
             )
             db.session.add(device)
             db.session.flush()
         else:
             if voltage_mv is not None:
                 device.voltage_mv = voltage_mv
+            device.is_online = True
+            device.last_seen_at = datetime.utcnow()
 
         for ch in result['channels']:
             channel = SlaveChannel.query.filter_by(device_id=device.id, name=ch['name']).first()
@@ -143,12 +177,14 @@ class TcpConnectionHandler:
                 channel = SlaveChannel(
                     device_id=device.id,
                     name=ch['name'],
-                    online=ch['online']
+                    online=ch['online'],
+                    last_data_at=datetime.utcnow()
                 )
                 db.session.add(channel)
                 db.session.flush()
             else:
                 channel.online = ch['online']
+                channel.last_data_at = datetime.utcnow()
 
             for dp in ch['data_points']:
                 data_point = DataPoint(
@@ -159,6 +195,12 @@ class TcpConnectionHandler:
                 db.session.add(data_point)
 
         db.session.commit()
+        
+        # 更新统计
+        with _tcp_stats_lock:
+            _tcp_stats['total_messages'] += 1
+            _tcp_stats['last_activity'] = datetime.utcnow()
+        
         logger.info(f"Stored data for user {user_id}, device {device_name}")
 
     def check_alarms(self, user_id, result):

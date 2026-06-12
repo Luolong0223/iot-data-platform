@@ -499,6 +499,246 @@ body {
     background-color: rgba(231, 76, 60, 0.05);
 }
 
+/* v3.0 Enhanced UI Styles */
+
+/* Glass morphism effect */
+.glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+[data-bs-theme="dark"] .glass-card {
+    background: rgba(22, 33, 62, 0.85);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Modern gradient buttons */
+.btn-gradient {
+    background: linear-gradient(135deg, var(--accent-color) 0%, #2980b9 100%);
+    border: none;
+    color: #fff;
+    transition: all 0.3s ease;
+}
+
+.btn-gradient:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
+}
+
+/* Card with icon header */
+.icon-card {
+    position: relative;
+    padding-top: 0;
+}
+
+.icon-card .card-icon-header {
+    position: absolute;
+    top: -20px;
+    left: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Pulse animation for live indicators */
+.live-indicator {
+    position: relative;
+}
+
+.live-indicator::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 8px;
+    height: 8px;
+    background-color: var(--success-color);
+    border-radius: 50%;
+    animation: livePulse 1.5s infinite;
+}
+
+@keyframes livePulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(39, 174, 96, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(39, 174, 96, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(39, 174, 96, 0);
+    }
+}
+
+/* Device group card */
+.group-card {
+    border-radius: 12px;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.group-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.group-card .group-header {
+    padding: 1rem;
+    border-radius: 10px 10px 0 0;
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Export button styles */
+.btn-export {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-export:hover {
+    transform: translateY(-2px);
+}
+
+.btn-export.excel {
+    background-color: #217346;
+    color: #fff;
+}
+
+.btn-export.csv {
+    background-color: #4a90a4;
+    color: #fff;
+}
+
+/* Toast notifications */
+.toast-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 1100;
+}
+
+/* Loading spinner */
+.spinner-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+[data-bs-theme="dark"] .spinner-overlay {
+    background: rgba(26, 26, 46, 0.8);
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+}
+
+.empty-state i {
+    font-size: 4rem;
+    color: #dee2e6;
+    margin-bottom: 1rem;
+}
+
+.empty-state p {
+    color: #6c757d;
+    margin-bottom: 1rem;
+}
+
+/* Severity badges for alarms */
+.severity-critical {
+    background-color: #dc3545 !important;
+    color: #fff !important;
+}
+
+.severity-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.severity-info {
+    background-color: #17a2b8 !important;
+    color: #fff !important;
+}
+
+/* Health status indicators */
+.health-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.health-status .indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.health-status .indicator.healthy {
+    background-color: var(--success-color);
+}
+
+.health-status .indicator.warning {
+    background-color: var(--warning-color);
+}
+
+.health-status .indicator.error {
+    background-color: var(--danger-color);
+}
+
+/* Improved mobile navigation */
+@media (max-width: 991.98px) {
+    .navbar-collapse {
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    
+    .nav-item.dropdown .dropdown-menu {
+        background-color: transparent;
+        border: none;
+        padding-left: 1rem;
+    }
+    
+    .dropdown-item {
+        color: rgba(255, 255, 255, 0.75) !important;
+    }
+}
+
+/* Print styles */
+@media print {
+    .navbar, .btn, .theme-toggle, nav {
+        display: none !important;
+    }
+    
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #dee2e6 !important;
+    }
+    
+    .container {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+}
+
 [data-bs-theme="dark"] .alarm-unread {
     background-color: rgba(231, 76, 60, 0.1);
 }

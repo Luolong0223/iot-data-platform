@@ -4,6 +4,8 @@ import threading
 from flask import Flask
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from config import config
 from models.database import db, User
@@ -15,11 +17,20 @@ from routes.tcp import tcp_bp
 from routes.pages import pages_bp
 from routes.alarms import alarms_bp
 from routes.stream import stream_bp
+from routes.health import health_bp
+from routes.export import export_bp
+from routes.groups import groups_bp
 
 logging.basicConfig(level=logging.INFO)
 
 login_manager = LoginManager()
 csrf = CSRFProtect()
+
+# 初始化限流器
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200 per hour", "50 per minute"]
+)
 
 # 防止 TCP 服务器被重复启动
 _tcp_server_started = False
@@ -54,11 +65,17 @@ def create_app(config_name=None):
     app = Flask(__name__, template_folder='templates', static_folder='static')
     app.config.from_object(config.get(config_name, config['default']))
 
+    # 初始化扩展
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
+    limiter.init_app(app)
+    
     login_manager.login_view = 'pages.login'
+    login_manager.login_message = '请先登录'
+    login_manager.login_message_category = 'warning'
 
+    # 注册蓝图
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(devices_bp)
@@ -67,6 +84,9 @@ def create_app(config_name=None):
     app.register_blueprint(pages_bp)
     app.register_blueprint(alarms_bp)
     app.register_blueprint(stream_bp)
+    app.register_blueprint(health_bp)
+    app.register_blueprint(export_bp)
+    app.register_blueprint(groups_bp)
 
     with app.app_context():
         db.create_all()
@@ -84,6 +104,7 @@ def load_user(user_id):
 
 
 def create_default_admin():
+    """创建默认管理员账户"""
     admin_username = os.environ.get('ADMIN_USERNAME') or 'admin'
     admin_password = os.environ.get('ADMIN_PASSWORD') or 'admin123'
 
@@ -93,7 +114,8 @@ def create_default_admin():
             username=admin_username,
             is_admin=True,
             tcp_port=9105,
-            storage_enabled=True
+            storage_enabled=True,
+            is_active=True
         )
         admin.set_password(admin_password)
         db.session.add(admin)
