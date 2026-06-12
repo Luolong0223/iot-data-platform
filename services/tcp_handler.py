@@ -18,10 +18,6 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
-# SSE 客户端管理
-_sse_clients = []
-_sse_lock = threading.Lock()
-
 # TCP 状态跟踪
 _tcp_stats = {
     'total_connections': 0,
@@ -31,26 +27,18 @@ _tcp_stats = {
 _tcp_stats_lock = threading.Lock()
 
 
-def register_sse_client():
-    event = threading.Event()
-    queue = []
-    client = {'event': event, 'queue': queue}
-    with _sse_lock:
-        _sse_clients.append(client)
-    return client
-
-
-def unregister_sse_client(client):
-    with _sse_lock:
-        if client in _sse_clients:
-            _sse_clients.remove(client)
-
-
-def notify_sse_clients(data):
-    with _sse_lock:
-        for client in _sse_clients:
-            client['queue'].append(data)
-            client['event'].set()
+def notify_realtime_stream(user_id, data):
+    """推送数据到实时数据流"""
+    try:
+        from routes.realtime import add_to_stream, push_to_user
+        add_to_stream(user_id, data)
+        push_to_user(user_id, {
+            'type': 'new_data',
+            'timestamp': datetime.now().isoformat(),
+            'data': data
+        })
+    except Exception as e:
+        logger.warning(f"Failed to push to realtime stream: {e}")
 
 
 def get_tcp_status():
@@ -67,12 +55,6 @@ def get_tcp_status():
         'total_messages': stats['total_messages'],
         'last_activity': stats['last_activity'].isoformat() if stats['last_activity'] else None
     }
-
-
-def get_sse_client_count():
-    """获取SSE客户端数量"""
-    with _sse_lock:
-        return len(_sse_clients)
 
 
 class TcpConnectionHandler:
@@ -141,21 +123,14 @@ class TcpConnectionHandler:
 
                 if user.storage_enabled:
                     self.store_data(user.id, result)
-                    # 推送 SSE 新数据事件
-                    for ch in result['channels']:
-                        for dp in ch['data_points']:
-                            notify_sse_clients({
-                                'type': 'new_data',
-                                'device_name': result['device_name'],
-                                'channel_name': ch['name'],
-                                'point_name': dp['name'],
-                                'value': dp['value'],
-                                'timestamp': datetime.utcnow().isoformat()
-                            })
-                    try:
-                        self.check_alarms(user.id, result)
-                    except Exception as e:
-                        logger.error(f"Alarm check error: {e}")
+                
+                # 推送数据到实时数据流
+                notify_realtime_stream(user.id, result)
+                
+                try:
+                    self.check_alarms(user.id, result)
+                except Exception as e:
+                    logger.error(f"Alarm check error: {e}")
 
             except ValueError as e:
                 error_msg = str(e)
