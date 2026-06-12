@@ -29,5 +29,5 @@ Flask-Mail==0.9.1
 # Redis 支持（可选，用于缓存和限流存储）
 # redis==5.0.1
 
-# 安全增强
-cryptography==41.0.7
+# 安全增强（移除固定版本，让 pip 自动兼容系统已安装的包）
+# cryptography>=46.0.0
