@@ -20,14 +20,14 @@ xlsxwriter==3.1.9
 python-dateutil==2.8.2
 pytz==2023.3
 
+# 系统监控
+psutil==5.9.7
+
 # 邮件支持（可选）
 Flask-Mail==0.9.1
 
 # Redis 支持（可选，用于缓存和限流存储）
 # redis==5.0.1
-
-# 监控和健康检查
-# prometheus-flask-exporter==0.22.4
 
 # 安全增强
 cryptography==41.0.7
