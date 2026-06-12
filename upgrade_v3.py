@@ -11,9 +11,20 @@ import sqlite3
 
 def get_db_path():
     """获取数据库路径"""
-    # 从配置中读取
-    db_path = 'data.sqlite'
-    return db_path
+    # 尝试多个可能的数据库路径
+    possible_paths = [
+        'instance/database.db',  # Flask 默认 instance 目录
+        'database.db',           # 根目录
+        'data.sqlite',           # 旧版本命名
+        'instance/data.sqlite',  # instance 目录旧版本
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    
+    # 如果都不存在，返回默认路径（会在后面提示错误）
+    return 'instance/database.db'
 
 def check_column_exists(cursor, table, column):
     """检查列是否存在"""
