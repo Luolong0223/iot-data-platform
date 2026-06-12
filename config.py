@@ -6,8 +6,16 @@ class Config:
     """基础配置"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'iot-data-platform-secret-key-2024-optimized'
     
-    # 数据库配置
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///database.db'
+    # 数据库配置 - MySQL
+    MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
+    MYSQL_PORT = int(os.environ.get('MYSQL_PORT', 3306))
+    MYSQL_USER = os.environ.get('MYSQL_USER', 'iot-platform')
+    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'cRwLGPScNejLEeBt')
+    MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE', 'iot-platform')
+    
+    # 构建数据库URI
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}?charset=utf8mb4'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_size': 10,
