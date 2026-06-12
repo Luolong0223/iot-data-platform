@@ -76,6 +76,13 @@ def alarms():
     return render_template('alarms.html')
 
 
+@pages_bp.route('/screen')
+@login_required
+def screen():
+    """数据大屏"""
+    return render_template('screen.html')
+
+
 @pages_bp.route('/admin')
 @login_required
 def admin():

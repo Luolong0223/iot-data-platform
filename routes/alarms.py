@@ -120,7 +120,7 @@ def list_records():
     })
 
 
-@alarms_bp.route('/records/<int:record_id>/read', methods=['PUT'])
+@alarms_bp.route('/records/<int:record_id>/read', methods=['PUT', 'POST'])
 @login_required
 def mark_record_read(record_id):
     record = AlarmRecord.query.filter_by(id=record_id, user_id=current_user.id).first()
@@ -130,3 +130,113 @@ def mark_record_read(record_id):
     record.is_read = True
     db.session.commit()
     return jsonify({'success': True, 'record': record.to_dict()})
+
+
+@alarms_bp.route('/records/<int:record_id>', methods=['GET'])
+@login_required
+def get_record(record_id):
+    record = AlarmRecord.query.filter_by(id=record_id, user_id=current_user.id).first()
+    if not record:
+        return jsonify({'success': False, 'message': 'Record not found'}), 404
+    return jsonify(record.to_dict())
+
+
+@alarms_bp.route('/records/read-all', methods=['POST'])
+@login_required
+def mark_all_read():
+    AlarmRecord.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True})
+    db.session.commit()
+    return jsonify({'success': True, 'message': 'All records marked as read'})
+
+
+@alarms_bp.route('/records/clear-read', methods=['POST'])
+@login_required
+def clear_read_records():
+    AlarmRecord.query.filter_by(user_id=current_user.id, is_read=True).delete()
+    db.session.commit()
+    return jsonify({'success': True, 'message': 'Read records cleared'})
+
+
+@alarms_bp.route('/stats', methods=['GET'])
+@login_required
+def get_stats():
+    from sqlalchemy import func
+
+    # Count by level
+    level_counts = db.session.query(
+        AlarmRecord.level,
+        func.count(AlarmRecord.id)
+    ).filter(
+        AlarmRecord.user_id == current_user.id,
+        AlarmRecord.is_read == False
+    ).group_by(AlarmRecord.level).all()
+
+    stats = {
+        'critical': 0,
+        'warning': 0,
+        'info': 0,
+        'resolved': 0
+    }
+
+    for level, count in level_counts:
+        if level in stats:
+            stats[level] = count
+
+    # Count resolved (read) records
+    stats['resolved'] = AlarmRecord.query.filter_by(
+        user_id=current_user.id,
+        is_read=True
+    ).count()
+
+    return jsonify(stats)
+
+
+@alarms_bp.route('/stats/chart', methods=['GET'])
+@login_required
+def get_chart_stats():
+    from sqlalchemy import func, Date, cast
+    from datetime import datetime, timedelta
+
+    # By level
+    level_counts = db.session.query(
+        AlarmRecord.level,
+        func.count(AlarmRecord.id)
+    ).filter(
+        AlarmRecord.user_id == current_user.id
+    ).group_by(AlarmRecord.level).all()
+
+    by_level = {'critical': 0, 'warning': 0, 'info': 0}
+    for level, count in level_counts:
+        if level in by_level:
+            by_level[level] = count
+
+    # Trend (last 7 days)
+    trend = []
+    for i in range(6, -1, -1):
+        date = datetime.now().date() - timedelta(days=i)
+        count = db.session.query(func.count(AlarmRecord.id)).filter(
+            AlarmRecord.user_id == current_user.id,
+            func.date(AlarmRecord.created_at) == date
+        ).scalar()
+        trend.append({
+            'date': date.strftime('%m-%d'),
+            'count': count or 0
+        })
+
+    # By device (top 10)
+    device_counts = db.session.query(
+        AlarmRecord.device_name,
+        func.count(AlarmRecord.id).label('cnt')
+    ).filter(
+        AlarmRecord.user_id == current_user.id
+    ).group_by(AlarmRecord.device_name).order_by(
+        func.count(AlarmRecord.id).desc()
+    ).limit(10).all()
+
+    by_device = [{'device_name': d or 'Unknown', 'count': c} for d, c in device_counts]
+
+    return jsonify({
+        'by_level': by_level,
+        'trend': trend,
+        'by_device': by_device
+    })

@@ -20,6 +20,8 @@ from routes.stream import stream_bp
 from routes.health import health_bp
 from routes.export import export_bp
 from routes.groups import groups_bp
+from routes.realtime import realtime_bp
+from routes.dashboard_api import dashboard_bp
 
 logging.basicConfig(level=logging.INFO)
 
@@ -87,6 +89,10 @@ def create_app(config_name=None):
     app.register_blueprint(health_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(groups_bp)
+    app.register_blueprint(realtime_bp)
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(groups_bp)
+    app.register_blueprint(realtime_bp)
 
     with app.app_context():
         db.create_all()

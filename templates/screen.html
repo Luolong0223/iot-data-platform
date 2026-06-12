@@ -1,0 +1,657 @@
+{% extends "base.html" %}
+
+{% block title %}数据大屏 - IoT 数据平台{% endblock %}
+
+{% block content %}
+<div class="screen-container">
+    <!-- 顶部标题栏 -->
+    <div class="screen-header">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-display me-2"></i>
+            <h4 class="mb-0">IoT 数据监控大屏</h4>
+        </div>
+        <div class="d-flex align-items-center gap-4">
+            <span class="badge bg-success fs-6" id="sseStatus">
+                <i class="bi bi-broadcast"></i> 实时连接中
+            </span>
+            <span class="fs-5" id="currentTime">--:--:--</span>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="screen-stat-card">
+                <div class="stat-icon bg-primary-soft">
+                    <i class="bi bi-hdd-rack"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="statDevices">0</div>
+                    <div class="stat-label">设备总数</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="screen-stat-card success">
+                <div class="stat-icon bg-success-soft">
+                    <i class="bi bi-wifi"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="statOnlineRate">0%</div>
+                    <div class="stat-label">在线率</div>
+                    <div class="stat-sub"><span id="statOnline">0</span> / <span id="statTotal">0</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="screen-stat-card info">
+                <div class="stat-icon bg-info-soft">
+                    <i class="bi bi-database"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="statData">0</div>
+                    <div class="stat-label">今日数据</div>
+                    <div class="stat-sub"><span id="statRate">0</span> 条/分钟</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="screen-stat-card warning">
+                <div class="stat-icon bg-warning-soft">
+                    <i class="bi bi-bell"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="statAlarms">0</div>
+                    <div class="stat-label">今日报警</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主要内容区 -->
+    <div class="row g-4">
+        <!-- 实时数据流 -->
+        <div class="col-lg-4">
+            <div class="screen-card h-100">
+                <div class="screen-card-header">
+                    <i class="bi bi-lightning-charge me-2"></i>实时数据流
+                    <span class="badge bg-danger ms-2 animate-pulse">LIVE</span>
+                </div>
+                <div class="screen-card-body">
+                    <div class="data-stream" id="dataStream">
+                        <div class="text-center text-muted py-5">
+                            <i class="bi bi-arrow-repeat spin fs-1"></i>
+                            <p class="mt-2">等待数据...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 趋势图表 -->
+        <div class="col-lg-4">
+            <div class="screen-card h-100">
+                <div class="screen-card-header">
+                    <i class="bi bi-graph-up me-2"></i>数据趋势
+                    <select class="form-select form-select-sm w-auto ms-auto" id="chartPeriod">
+                        <option value="24h">24小时</option>
+                        <option value="7d">7天</option>
+                        <option value="30d">30天</option>
+                    </select>
+                </div>
+                <div class="screen-card-body">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设备状态 -->
+        <div class="col-lg-4">
+            <div class="screen-card h-100">
+                <div class="screen-card-header">
+                    <i class="bi bi-hdd-rack me-2"></i>设备状态
+                </div>
+                <div class="screen-card-body p-0">
+                    <div class="device-list" id="deviceList">
+                        <div class="text-center text-muted py-5">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部区域 -->
+    <div class="row g-4 mt-2">
+        <!-- 最新报警 -->
+        <div class="col-lg-6">
+            <div class="screen-card">
+                <div class="screen-card-header">
+                    <i class="bi bi-bell me-2"></i>最新报警
+                </div>
+                <div class="screen-card-body p-0">
+                    <div class="alarm-list" id="alarmList">
+                        <div class="text-center text-muted py-4">暂无报警</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据点排行 -->
+        <div class="col-lg-6">
+            <div class="screen-card">
+                <div class="screen-card-header">
+                    <i class="bi bi-bar-chart me-2"></i>设备数据排行
+                </div>
+                <div class="screen-card-body p-0">
+                    <div class="rank-list" id="rankList">
+                        <div class="text-center text-muted py-4">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.screen-container {
+    padding: 20px;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    min-height: calc(100vh - 60px);
+    color: #fff;
+}
+
+.screen-header {
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 15px 25px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(10px);
+}
+
+.screen-header h4 {
+    color: #fff;
+    font-weight: 600;
+}
+
+.screen-stat-card {
+    background: rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.screen-stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.screen-stat-card .stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+}
+
+.screen-stat-card .stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.screen-stat-card .stat-label {
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 5px;
+}
+
+.screen-stat-card .stat-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 3px;
+}
+
+.bg-primary-soft { background: rgba(52, 152, 219, 0.3); color: #3498db; }
+.bg-success-soft { background: rgba(46, 204, 113, 0.3); color: #2ecc71; }
+.bg-info-soft { background: rgba(52, 152, 219, 0.3); color: #3498db; }
+.bg-warning-soft { background: rgba(241, 196, 15, 0.3); color: #f1c40f; }
+
+.screen-card {
+    background: rgba(255,255,255,0.08);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+}
+
+.screen-card-header {
+    background: rgba(255,255,255,0.05);
+    padding: 12px 20px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.screen-card-body {
+    padding: 15px;
+}
+
+.data-stream {
+    height: 300px;
+    overflow-y: auto;
+}
+
+.data-stream::-webkit-scrollbar {
+    width: 6px;
+}
+
+.data-stream::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+}
+
+.data-stream::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.3);
+    border-radius: 3px;
+}
+
+.stream-item {
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 10px 15px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    border-left: 3px solid #2ecc71;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.device-list, .alarm-list, .rank-list {
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.device-item, .alarm-item, .rank-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.device-item:hover, .rank-item:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-dot.online { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; }
+.status-dot.offline { background: #e74c3c; }
+.status-dot.warning { background: #f1c40f; }
+
+.alarm-item {
+    background: rgba(231, 76, 60, 0.1);
+    border-left: 3px solid #e74c3c;
+    margin-bottom: 8px;
+    border-radius: 0 8px 8px 0;
+}
+
+.animate-pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.progress-bar-custom {
+    height: 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.progress-bar-custom .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.form-select {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+}
+
+.form-select option {
+    background: #1a1a2e;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+// 大屏JavaScript
+let sseConnected = false;
+let eventSource = null;
+let trendChart = null;
+let dataStreamData = [];
+
+// 更新时间
+function updateTime() {
+    const now = new Date();
+    document.getElementById('currentTime').textContent = 
+        now.toLocaleTimeString('zh-CN', { hour12: false });
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+// 初始化趋势图表
+function initTrendChart() {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: '数据量',
+                data: [],
+                borderColor: '#2ecc71',
+                backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    ticks: { color: 'rgba(255,255,255,0.7)', maxTicksLimit: 8 },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                },
+                y: {
+                    ticks: { color: 'rgba(255,255,255,0.7)' },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                }
+            }
+        }
+    });
+}
+
+// 加载统计数据
+async function loadStats() {
+    try {
+        const res = await fetch('/api/realtime/stats');
+        const json = await res.json();
+        if (json.success) {
+            const data = json.data;
+            document.getElementById('statDevices').textContent = data.devices.total;
+            document.getElementById('statOnlineRate').textContent = data.devices.online_rate + '%';
+            document.getElementById('statOnline').textContent = data.devices.online;
+            document.getElementById('statTotal').textContent = data.devices.total;
+            document.getElementById('statData').textContent = formatNumber(data.data.today);
+            document.getElementById('statRate').textContent = data.data.rate_per_min;
+            document.getElementById('statAlarms').textContent = data.alarms.today;
+        }
+    } catch (e) {
+        console.error('加载统计失败:', e);
+    }
+}
+
+// 加载趋势数据
+async function loadTrend() {
+    const period = document.getElementById('chartPeriod').value;
+    try {
+        const res = await fetch(`/api/realtime/trend?period=${period}`);
+        const json = await res.json();
+        if (json.success) {
+            trendChart.data.labels = json.data.labels;
+            trendChart.data.datasets[0].data = json.data.values;
+            trendChart.update();
+        }
+    } catch (e) {
+        console.error('加载趋势失败:', e);
+    }
+}
+
+// 加载设备列表
+async function loadDevices() {
+    try {
+        const res = await fetch('/api/devices');
+        const json = await res.json();
+        if (json.success) {
+            const list = document.getElementById('deviceList');
+            if (json.devices.length === 0) {
+                list.innerHTML = '<div class="text-center text-muted py-4">暂无设备</div>';
+                return;
+            }
+            list.innerHTML = json.devices.map(d => `
+                <div class="device-item">
+                    <div>
+                        <span class="status-dot ${d.is_online ? 'online' : 'offline'}"></span>
+                        ${d.name}
+                    </div>
+                    <small class="text-muted">${d.is_online ? '在线' : '离线'}</small>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('加载设备失败:', e);
+    }
+}
+
+// 加载报警列表
+async function loadAlarms() {
+    try {
+        const res = await fetch('/api/alarms?limit=5');
+        const json = await res.json();
+        const list = document.getElementById('alarmList');
+        if (!json.alarms || json.alarms.length === 0) {
+            list.innerHTML = '<div class="text-center text-muted py-4">暂无报警</div>';
+            return;
+        }
+        list.innerHTML = json.alarms.map(a => `
+            <div class="alarm-item">
+                <div>
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    ${a.message}
+                </div>
+                <small class="text-muted">${formatTime(a.created_at)}</small>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('加载报警失败:', e);
+    }
+}
+
+// 加载排行
+async function loadRanks() {
+    try {
+        const res = await fetch('/api/devices');
+        const json = await res.json();
+        if (json.success) {
+            const list = document.getElementById('rankList');
+            if (json.devices.length === 0) {
+                list.innerHTML = '<div class="text-center text-muted py-4">暂无数据</div>';
+                return;
+            }
+            // 按数据量排序（这里简化处理）
+            const devices = json.devices.slice(0, 5);
+            list.innerHTML = devices.map((d, i) => `
+                <div class="rank-item">
+                    <div>
+                        <span class="badge bg-primary me-2">${i + 1}</span>
+                        ${d.name}
+                    </div>
+                    <small class="text-muted">${d.channel_count || 0} 通道</small>
+                </div>
+            `).join('');
+        }
+    } catch (e) {
+        console.error('加载排行失败:', e);
+    }
+}
+
+// SSE连接
+function connectSSE() {
+    if (eventSource) {
+        eventSource.close();
+    }
+    
+    eventSource = new EventSource('/api/realtime/stream');
+    
+    eventSource.onopen = function() {
+        sseConnected = true;
+        document.getElementById('sseStatus').innerHTML = '<i class="bi bi-broadcast"></i> 实时连接中';
+        document.getElementById('sseStatus').className = 'badge bg-success fs-6';
+    };
+    
+    eventSource.onmessage = function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            handleSSEMessage(data);
+        } catch (err) {
+            console.error('解析消息失败:', err);
+        }
+    };
+    
+    eventSource.onerror = function() {
+        sseConnected = false;
+        document.getElementById('sseStatus').innerHTML = '<i class="bi bi-broadcast"></i> 已断开';
+        document.getElementById('sseStatus').className = 'badge bg-danger fs-6';
+        // 5秒后重连
+        setTimeout(connectSSE, 5000);
+    };
+}
+
+// 处理SSE消息
+function handleSSEMessage(data) {
+    if (data.type === 'connected') {
+        console.log('SSE已连接');
+    } else if (data.type === 'heartbeat') {
+        // 心跳，忽略
+    } else if (data.type === 'data' || data.type === 'history') {
+        addDataStreamItem(data);
+    }
+}
+
+// 添加数据流项
+function addDataStreamItem(data) {
+    const container = document.getElementById('dataStream');
+    const item = document.createElement('div');
+    item.className = 'stream-item';
+    
+    const timestamp = new Date(data.timestamp || data.data.timestamp);
+    const timeStr = timestamp.toLocaleTimeString('zh-CN', { hour12: false });
+    
+    let content = '';
+    if (data.data) {
+        const d = data.data;
+        content = `
+            <strong>${timeStr}</strong> │ 
+            ${d.device_name || d.device || 'Unknown'} │ 
+            ${d.channel_name || 'Channel'} │ 
+            ${d.data_point || 'Value'}: ${d.value !== undefined ? d.value : '-'}
+        `;
+    } else {
+        content = `<strong>${timeStr}</strong> │ ${JSON.stringify(data)}`;
+    }
+    
+    item.innerHTML = content;
+    
+    // 插入到顶部
+    if (container.children.length > 0 && container.children[0].tagName !== 'DIV') {
+        container.insertBefore(item, container.firstChild);
+    } else {
+        container.insertBefore(item, container.firstChild);
+    }
+    
+    // 移除加载提示
+    const placeholder = container.querySelector('.text-center');
+    if (placeholder) {
+        placeholder.remove();
+    }
+    
+    // 限制显示数量
+    while (container.children.length > 50) {
+        container.removeChild(container.lastChild);
+    }
+}
+
+// 格式化数字
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+// 格式化时间
+function formatTime(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+// 图表周期切换
+document.getElementById('chartPeriod').addEventListener('change', loadTrend);
+
+// 初始化
+document.addEventListener('DOMContentLoaded', function() {
+    initTrendChart();
+    loadStats();
+    loadTrend();
+    loadDevices();
+    loadAlarms();
+    loadRanks();
+    connectSSE();
+    
+    // 定时刷新
+    setInterval(loadStats, 10000);  // 10秒刷新统计
+    setInterval(loadTrend, 60000);  // 1分钟刷新趋势
+    setInterval(loadDevices, 30000); // 30秒刷新设备
+    setInterval(loadAlarms, 30000);  // 30秒刷新报警
+});
+</script>
+{% endblock %}

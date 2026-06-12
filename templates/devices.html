@@ -6,28 +6,78 @@
 <div class="fade-in">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="mb-0"><i class="bi bi-hdd-rack"></i> 设备管理</h4>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#deviceModal" onclick="resetDeviceForm()">
-            <i class="bi bi-plus-lg"></i> 添加设备
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-danger d-none" id="batchDeleteBtn" onclick="batchDeleteDevices()">
+                <i class="bi bi-trash"></i> 批量删除
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#deviceModal" onclick="resetDeviceForm()">
+                <i class="bi bi-plus-lg"></i> 添加设备
+            </button>
+        </div>
     </div>
 
+    <!-- 筛选栏 -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="searchInput" placeholder="搜索设备名称...">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="statusFilter">
+                        <option value="">全部状态</option>
+                        <option value="online">在线</option>
+                        <option value="offline">离线</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="groupFilter">
+                        <option value="">全部分组</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select form-select-sm" id="sortBy">
+                        <option value="id">按ID排序</option>
+                        <option value="name">按名称排序</option>
+                        <option value="last_seen">按最近活跃</option>
+                        <option value="voltage">按电压排序</option>
+                    </select>
+                </div>
+                <div class="col-md-3 text-end">
+                    <span class="text-muted small">
+                        共 <strong id="deviceCount">0</strong> 个设备，
+                        <span class="text-success"><strong id="onlineCount">0</strong> 在线</span>，
+                        <span class="text-danger"><strong id="offlineCount">0</strong> 离线</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设备列表 -->
     <div class="card">
-        <div class="card-body">
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle" id="devicesTable">
-                    <thead>
+                <table class="table table-hover align-middle mb-0" id="devicesTable">
+                    <thead class="table-light">
                         <tr>
-                            <th>ID</th>
+                            <th style="width: 40px;">
+                                <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll()">
+                            </th>
+                            <th style="width: 80px;">状态</th>
                             <th>设备名称</th>
-                            <th>电压 (mV)</th>
+                            <th>电压</th>
                             <th>位置</th>
-                            <th>通道数</th>
-                            <th>创建时间</th>
-                            <th class="text-end">操作</th>
+                            <th>通道/数据</th>
+                            <th>最近活跃</th>
+                            <th style="width: 140px;" class="text-end">操作</th>
                         </tr>
                     </thead>
                     <tbody id="devicesTableBody">
-                        <tr><td colspan="7" class="text-center text-muted py-4">加载中...</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-5"><div class="loading-spinner"></div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -47,16 +97,23 @@
                 <form id="deviceForm">
                     <input type="hidden" id="deviceId">
                     <div class="mb-3">
-                        <label for="deviceName" class="form-label">设备名称</label>
+                        <label for="deviceName" class="form-label">设备名称 <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="deviceName" required placeholder="如 Collector-1">
                     </div>
                     <div class="mb-3">
                         <label for="deviceVoltage" class="form-label">电压 (mV)</label>
                         <input type="number" class="form-control" id="deviceVoltage" placeholder="如 3037">
+                        <small class="text-muted">设备当前电压，单位毫伏</small>
                     </div>
                     <div class="mb-3">
                         <label for="deviceLocation" class="form-label">位置描述</label>
                         <input type="text" class="form-control" id="deviceLocation" placeholder="如 实验室A">
+                    </div>
+                    <div class="mb-3">
+                        <label for="deviceGroup" class="form-label">所属分组</label>
+                        <select class="form-select" id="deviceGroup">
+                            <option value="">无分组</option>
+                        </select>
                     </div>
                 </form>
             </div>
@@ -96,6 +153,21 @@
         </div>
     </div>
 </div>
+
+<!-- Device Detail Modal -->
+<div class="modal fade" id="deviceDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">设备详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="deviceDetailContent">
+                <!-- 动态加载 -->
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -104,46 +176,239 @@
 <script>
 (function() {
     let devices = [];
+    let filteredDevices = [];
+    let selectedDevices = new Set();
     let locationMap = null;
     let locationMarker = null;
     let currentLocDeviceId = null;
+    let groups = [];
 
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDevices();
+        loadGroups();
+        initEventListeners();
+    });
+
+    // 加载分组
+    function loadGroups() {
+        apiRequest('/api/groups').then(function(data) {
+            groups = data.groups || [];
+            const select = document.getElementById('groupFilter');
+            const deviceGroupSelect = document.getElementById('deviceGroup');
+            
+            groups.forEach(function(g) {
+                select.innerHTML += '<option value="' + g.id + '">' + g.name + '</option>';
+                deviceGroupSelect.innerHTML += '<option value="' + g.id + '">' + g.name + '</option>';
+            });
+        });
+    }
+
+    // 初始化事件监听
+    function initEventListeners() {
+        document.getElementById('searchInput').addEventListener('input', debounce(filterDevices, 300));
+        document.getElementById('statusFilter').addEventListener('change', filterDevices);
+        document.getElementById('groupFilter').addEventListener('change', filterDevices);
+        document.getElementById('sortBy').addEventListener('change', filterDevices);
+    }
+
+    // 防抖函数
+    function debounce(fn, delay) {
+        let timer;
+        return function() {
+            clearTimeout(timer);
+            timer = setTimeout(fn, delay);
+        };
+    }
+
+    // 筛选设备
+    function filterDevices() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const status = document.getElementById('statusFilter').value;
+        const groupId = document.getElementById('groupFilter').value;
+        const sortBy = document.getElementById('sortBy').value;
+
+        filteredDevices = devices.filter(function(d) {
+            const matchSearch = !search || (d.name || '').toLowerCase().includes(search);
+            const matchStatus = !status || 
+                (status === 'online' && d.is_online) || 
+                (status === 'offline' && !d.is_online);
+            const matchGroup = !groupId || d.group_id == groupId;
+            return matchSearch && matchStatus && matchGroup;
+        });
+
+        // 排序
+        filteredDevices.sort(function(a, b) {
+            if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
+            if (sortBy === 'last_seen') return new Date(b.last_seen_at || 0) - new Date(a.last_seen_at || 0);
+            if (sortBy === 'voltage') return (b.voltage_mv || 0) - (a.voltage_mv || 0);
+            return a.id - b.id;
+        });
+
+        renderDevices();
+    }
+
+    // 加载设备
+    window.loadDevices = function() {
+        apiRequest('/api/devices').then(function(data) {
+            devices = data.devices || [];
+            filteredDevices = [...devices];
+            
+            // 更新统计
+            document.getElementById('deviceCount').textContent = devices.length;
+            document.getElementById('onlineCount').textContent = devices.filter(function(d) { return d.is_online; }).length;
+            document.getElementById('offlineCount').textContent = devices.filter(function(d) { return !d.is_online; }).length;
+            
+            renderDevices();
+        }).catch(function(err) {
+            showToast('加载设备失败: ' + err.message, 'error');
+        });
+    };
+
+    // 渲染设备列表
+    function renderDevices() {
+        const tbody = document.getElementById('devicesTableBody');
+        
+        if (!filteredDevices.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-5">暂无设备</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filteredDevices.map(function(d) {
+            const statusClass = d.is_online ? 'success' : 'danger';
+            const statusText = d.is_online ? '在线' : '离线';
+            const rowClass = d.is_online ? '' : 'device-status-offline';
+            const voltageStatus = getVoltageStatus(d.voltage_mv);
+            const lastSeen = d.last_seen_at ? formatRelativeTime(d.last_seen_at) : '-';
+            
+            return '<tr class="' + rowClass + '">' +
+                '<td><input type="checkbox" class="form-check-input device-checkbox" data-id="' + d.id + '" onchange="toggleDeviceSelect(' + d.id + ')"></td>' +
+                '<td><span class="badge bg-' + statusClass + ' badge-online">' + statusText + '</span></td>' +
+                '<td><strong>' + (d.name || '-') + '</strong>' + 
+                    (d.group_name ? '<br><small class="text-muted">' + d.group_name + '</small>' : '') + '</td>' +
+                '<td><span class="' + voltageStatus.class + '">' + (d.voltage_mv || '-') + ' mV</span>' +
+                    (voltageStatus.icon ? ' <i class="bi ' + voltageStatus.icon + '"></i>' : '') + '</td>' +
+                '<td>' + (d.location_name || '-') + '</td>' +
+                '<td><span class="badge bg-secondary">' + (d.channel_count || 0) + '</span> 通道</td>' +
+                '<td><small class="text-muted">' + lastSeen + '</small></td>' +
+                '<td class="text-end">' +
+                    '<div class="btn-group btn-group-sm">' +
+                    '<button class="btn btn-outline-primary" onclick="viewDevice(' + d.id + ')" title="详情"><i class="bi bi-eye"></i></button>' +
+                    '<button class="btn btn-outline-secondary" onclick="editDevice(' + d.id + ')" title="编辑"><i class="bi bi-pencil"></i></button>' +
+                    '<button class="btn btn-outline-success" onclick="openLocationModal(' + d.id + ')" title="位置"><i class="bi bi-geo-alt"></i></button>' +
+                    '<button class="btn btn-outline-danger" onclick="deleteDevice(' + d.id + ')" title="删除"><i class="bi bi-trash"></i></button>' +
+                    '</div>' +
+                '</td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    // 电压状态
+    function getVoltageStatus(voltage) {
+        if (!voltage) return { class: 'text-muted', icon: '' };
+        if (voltage < 3000) return { class: 'text-danger fw-bold', icon: 'bi-exclamation-triangle' };
+        if (voltage < 3500) return { class: 'text-warning', icon: '' };
+        return { class: 'text-success', icon: '' };
+    }
+
+    // 相对时间
+    function formatRelativeTime(dateStr) {
+        if (!dateStr) return '-';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diff = Math.floor((now - date) / 1000);
+        
+        if (diff < 60) return '刚刚';
+        if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+        if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+        return Math.floor(diff / 86400) + '天前';
+    }
+
+    // 选择相关
+    window.toggleSelectAll = function() {
+        const checked = document.getElementById('selectAll').checked;
+        document.querySelectorAll('.device-checkbox').forEach(function(cb) {
+            cb.checked = checked;
+            const id = parseInt(cb.dataset.id);
+            if (checked) {
+                selectedDevices.add(id);
+            } else {
+                selectedDevices.delete(id);
+            }
+        });
+        updateBatchButton();
+    };
+
+    window.toggleDeviceSelect = function(id) {
+        if (selectedDevices.has(id)) {
+            selectedDevices.delete(id);
+        } else {
+            selectedDevices.add(id);
+        }
+        updateBatchButton();
+    };
+
+    function updateBatchButton() {
+        const btn = document.getElementById('batchDeleteBtn');
+        btn.classList.toggle('d-none', selectedDevices.size === 0);
+    }
+
+    window.batchDeleteDevices = function() {
+        if (!selectedDevices.size) return;
+        confirmDelete('确定要删除选中的 ' + selectedDevices.size + ' 个设备吗？', function() {
+            // TODO: 实现批量删除API
+            showToast('批量删除功能开发中', 'warning');
+        });
+    };
+
+    // 设备操作
     window.resetDeviceForm = function() {
         document.getElementById('deviceId').value = '';
         document.getElementById('deviceName').value = '';
         document.getElementById('deviceVoltage').value = '';
         document.getElementById('deviceLocation').value = '';
+        document.getElementById('deviceGroup').value = '';
         document.getElementById('deviceModalTitle').textContent = '添加设备';
     };
 
-    function loadDevices() {
-        apiRequest('/api/devices').then(function(data) {
-            devices = data.devices || [];
-            const tbody = document.getElementById('devicesTableBody');
-            if (!devices.length) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">暂无设备</td></tr>';
-                return;
+    window.viewDevice = function(id) {
+        const d = devices.find(function(x) { return x.id === id; });
+        if (!d) return;
+        
+        // 加载设备详情
+        apiRequest('/api/devices/' + id + '/channels').then(function(data) {
+            const channels = data.channels || [];
+            
+            let html = '<div class="row">' +
+                '<div class="col-md-6"><h6 class="text-muted">基本信息</h6>' +
+                '<table class="table table-sm"><tbody>' +
+                '<tr><td>设备名称</td><td><strong>' + (d.name || '-') + '</strong></td></tr>' +
+                '<tr><td>状态</td><td><span class="badge bg-' + (d.is_online ? 'success' : 'danger') + '">' + (d.is_online ? '在线' : '离线') + '</span></td></tr>' +
+                '<tr><td>电压</td><td>' + (d.voltage_mv || '-') + ' mV</td></tr>' +
+                '<tr><td>位置</td><td>' + (d.location_name || '-') + '</td></tr>' +
+                '<tr><td>创建时间</td><td>' + formatDateTime(d.created_at) + '</td></tr>' +
+                '</tbody></table></div>' +
+                '<div class="col-md-6"><h6 class="text-muted">通道信息</h6>';
+            
+            if (channels.length) {
+                html += '<ul class="list-group">';
+                channels.forEach(function(c) {
+                    html += '<li class="list-group-item d-flex justify-content-between">' +
+                        '<span>' + (c.name || 'Channel') + '</span>' +
+                        '<span class="badge bg-' + (c.online ? 'success' : 'secondary') + '">' + (c.online ? '在线' : '离线') + '</span>' +
+                        '</li>';
+                });
+                html += '</ul>';
+            } else {
+                html += '<p class="text-muted">暂无通道数据</p>';
             }
-            tbody.innerHTML = devices.map(function(d) {
-                return '<tr>' +
-                    '<td>' + d.id + '</td>' +
-                    '<td><strong>' + (d.name || '-') + '</strong></td>' +
-                    '<td>' + (d.voltage_mv || '-') + '</td>' +
-                    '<td>' + (d.location_name || '-') + '<br><small class="text-muted">' +
-                        (d.latitude ? d.latitude.toFixed(4) + ', ' + d.longitude.toFixed(4) : '未设置') + '</small></td>' +
-                    '<td>' + (d.channels ? d.channels.length : 0) + '</td>' +
-                    '<td>' + formatDateTime(d.created_at) + '</td>' +
-                    '<td class="text-end">' +
-                        '<button class="btn btn-sm btn-outline-primary me-1" onclick="editDevice(' + d.id + ')" title="编辑"><i class="bi bi-pencil"></i></button>' +
-                        '<button class="btn btn-sm btn-outline-success me-1" onclick="openLocationModal(' + d.id + ')" title="位置"><i class="bi bi-geo-alt"></i></button>' +
-                        '<button class="btn btn-sm btn-outline-danger" onclick="deleteDevice(' + d.id + ')" title="删除"><i class="bi bi-trash"></i></button>' +
-                    '</td>' +
-                '</tr>';
-            }).join('');
-        }).catch(function(err) {
-            showToast('加载设备失败: ' + err.message, 'error');
+            
+            html += '</div></div>';
+            
+            document.getElementById('deviceDetailContent').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('deviceDetailModal')).show();
         });
-    }
+    };
 
     window.editDevice = function(id) {
         const d = devices.find(function(x) { return x.id === id; });
@@ -152,6 +417,7 @@
         document.getElementById('deviceName').value = d.name || '';
         document.getElementById('deviceVoltage').value = d.voltage_mv || '';
         document.getElementById('deviceLocation').value = d.location_name || '';
+        document.getElementById('deviceGroup').value = d.group_id || '';
         document.getElementById('deviceModalTitle').textContent = '编辑设备';
         new bootstrap.Modal(document.getElementById('deviceModal')).show();
     };
@@ -161,7 +427,8 @@
         const payload = {
             name: document.getElementById('deviceName').value,
             voltage_mv: parseInt(document.getElementById('deviceVoltage').value) || null,
-            location_name: document.getElementById('deviceLocation').value
+            location_name: document.getElementById('deviceLocation').value,
+            group_id: document.getElementById('deviceGroup').value || null
         };
         const url = id ? '/api/devices/' + id : '/api/devices';
         const method = id ? 'PUT' : 'POST';
@@ -185,6 +452,7 @@
         });
     };
 
+    // 位置相关
     window.openLocationModal = function(id) {
         currentLocDeviceId = id;
         const d = devices.find(function(x) { return x.id === id; });
@@ -235,8 +503,6 @@
             showToast(err.message, 'error');
         });
     };
-
-    document.addEventListener('DOMContentLoaded', loadDevices);
 })();
 </script>
 {% endblock %}
