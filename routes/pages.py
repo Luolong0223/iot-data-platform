@@ -88,7 +88,7 @@ def alarms():
 @login_required
 def alarm_rules():
     """告警规则配置页面"""
-    return render_template('alarm_rules.html')
+    return render_template('alarm_rules_v2.html')
 
 
 @pages_bp.route('/hierarchy')
@@ -123,14 +123,14 @@ def platform():
 @login_required
 def rbac():
     """RBAC 角色权限管理"""
-    return render_template('rbac.html')
+    return render_template('rbac_v2.html')
 
 
 @pages_bp.route('/ota')
 @login_required
 def ota():
     """OTA 固件升级管理"""
-    return render_template('ota.html')
+    return render_template('ota_v2.html')
 
 
 @pages_bp.route('/admin')

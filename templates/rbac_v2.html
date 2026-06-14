@@ -1,0 +1,230 @@
+{% extends "base_v2.html" %}
+
+{% block title %}角色权限管理 - IoT数据平台{% endblock %}
+
+{% block page_title %}角色权限管理 (RBAC){% endblock %}
+
+{% block content %}
+<div class="rbac-page">
+    <!-- 顶部操作栏 -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-4">
+            <button onclick="rbacV2.switchTab('roles')" id="tabRoles" 
+                    class="px-5 py-2 rounded-lg text-sm font-medium transition-colors bg-blue-600 text-white">
+                <i class="fas fa-user-tag mr-2"></i>角色管理
+            </button>
+            <button onclick="rbacV2.switchTab('users')" id="tabUsers"
+                    class="px-5 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-700/50 text-slate-300 hover:bg-slate-600">
+                <i class="fas fa-users mr-2"></i>用户分配
+            </button>
+        </div>
+        <button onclick="rbacV2.showAddRoleModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-2">
+            <i class="fas fa-plus"></i> 新建角色
+        </button>
+    </div>
+
+    <!-- 角色管理面板 -->
+    <div id="rolesPanel" class="space-y-6">
+        <!-- 统计卡片 -->
+        <div class="grid grid-cols-3 gap-6">
+            <div class="bg-gradient-to-br from-purple-600/20 to-purple-900/20 backdrop-blur-xl rounded-2xl border border-purple-500/20 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-400 mb-1">总角色数</p>
+                        <p id="totalRoles" class="text-3xl font-bold text-white">0</p>
+                    </div>
+                    <div class="w-14 h-14 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                        <i class="fas fa-user-tag text-2xl text-purple-400"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-cyan-600/20 to-cyan-900/20 backdrop-blur-xl rounded-2xl border border-cyan-500/20 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-400 mb-1">总用户数</p>
+                        <p id="totalUsers" class="text-3xl font-bold text-white">0</p>
+                    </div>
+                    <div class="w-14 h-14 rounded-xl bg-cyan-500/20 flex items-center justify-center">
+                        <i class="fas fa-users text-2xl text-cyan-400"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-br from-pink-600/20 to-pink-900/20 backdrop-blur-xl rounded-2xl border border-pink-500/20 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-400 mb-1">权限总数</p>
+                        <p id="totalPerms" class="text-3xl font-bold text-white">0</p>
+                    </div>
+                    <div class="w-14 h-14 rounded-xl bg-pink-500/20 flex items-center justify-center">
+                        <i class="fas fa-key text-2xl text-pink-400"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 角色列表 -->
+        <div class="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-700/50">
+                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <i class="fas fa-shield-alt text-purple-400"></i> 角色列表
+                </h3>
+            </div>
+            
+            <div id="rolesListContainer" class="divide-y divide-slate-700/50">
+                <div class="text-center py-12 text-slate-500">
+                    <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户分配面板 -->
+    <div id="usersPanel" class="hidden space-y-6">
+        <div class="bg-slate-800/30 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-700/50">
+                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <i class="fas fa-users-cog text-cyan-400"></i> 用户与角色分配
+                </h3>
+            </div>
+            
+            <div id="usersListContainer" class="divide-y divide-slate-700/50">
+                <div class="text-center py-12 text-slate-500">
+                    <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加/编辑角色模态框 -->
+<div id="roleModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="rbacV2.closeModal()"></div>
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl p-6 m-4">
+            <div class="flex items-center justify-between mb-6">
+                <h3 id="modalTitle" class="text-xl font-semibold text-white">新建角色</h3>
+                <button onclick="rbacV2.closeModal()" class="p-2 hover:bg-slate-700 rounded-lg transition-colors">
+                    <i class="fas fa-times text-slate-400"></i>
+                </button>
+            </div>
+            
+            <form id="roleForm" onsubmit="rbacV2.saveRole(event)">
+                <input type="hidden" id="roleId" value="">
+                
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">角色名称 *</label>
+                        <input type="text" id="roleName" required
+                               class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                               placeholder="例如：设备管理员">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">角色描述</label>
+                        <textarea id="roleDesc" rows="2"
+                                  class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors resize-none"
+                                  placeholder="输入角色描述（可选）"></textarea>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-3">权限配置</label>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <!-- 设备权限 -->
+                            <div class="bg-slate-900/50 rounded-xl p-4 space-y-2">
+                                <h4 class="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                    <i class="fas fa-microchip text-blue-400"></i> 设备管理
+                                </h4>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="device:view" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">查看设备</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="device:create" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">创建设备</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="device:edit" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">编辑设备</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="device:delete" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">删除设备</span>
+                                </label>
+                            </div>
+                            
+                            <!-- 数据权限 -->
+                            <div class="bg-slate-900/50 rounded-xl p-4 space-y-2">
+                                <h4 class="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                    <i class="fas fa-database text-emerald-400"></i> 数据管理
+                                </h4>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="data:view" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">查看数据</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="data:export" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">导出数据</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="data:delete" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">删除数据</span>
+                                </label>
+                            </div>
+                            
+                            <!-- 告警权限 -->
+                            <div class="bg-slate-900/50 rounded-xl p-4 space-y-2">
+                                <h4 class="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                    <i class="fas fa-bell text-orange-400"></i> 告警管理
+                                </h4>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="alarm:view" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">查看告警</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="alarm:manage" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">管理规则</span>
+                                </label>
+                            </div>
+                            
+                            <!-- 系统权限 -->
+                            <div class="bg-slate-900/50 rounded-xl p-4 space-y-2">
+                                <h4 class="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                    <i class="fas fa-cogs text-red-400"></i> 系统管理
+                                </h4>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="user:manage" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">用户管理</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer px-2 py-1 hover:bg-slate-800 rounded">
+                                    <input type="checkbox" name="perms" value="system:config" class="rounded text-purple-600">
+                                    <span class="text-sm text-slate-300">系统配置</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700">
+                    <button type="button" onclick="rbacV2.closeModal()" 
+                            class="px-5 py-2.5 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors">
+                        取消
+                    </button>
+                    <button type="submit" 
+                            class="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2">
+                        <i class="fas fa-save"></i> 保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/v2/rbac.js') }}"></script>
+{% endblock %}
