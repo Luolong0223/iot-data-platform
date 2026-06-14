@@ -957,3 +957,126 @@ class ShadowHistory(db.Model):
             'operator': self.operator,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
+
+
+# ========================================================================
+# 规则引擎 (Rule Engine)
+# ========================================================================
+
+class Rule(db.Model):
+    """自动化规则"""
+    __tablename__ = 'rules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 触发条件 (JSON)
+    # 示例: {"device_id": 1, "metric": "temperature", "operator": ">", "value": 50, "duration": 60}
+    conditions = db.Column(db.Text, nullable=False)
+    
+    # 规则状态
+    is_enabled = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    trigger_count = db.Column(db.Integer, default=0, nullable=False)
+    last_triggered_at = db.Column(db.DateTime, nullable=True)
+    
+    # 优先级 (1-10, 10最高)
+    priority = db.Column(db.Integer, default=5, nullable=False)
+    
+    # 冷却时间 (秒)，防止频繁触发
+    cooldown_seconds = db.Column(db.Integer, default=300, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='rules')
+    actions = db.relationship('RuleAction', backref='rule', cascade='all, delete-orphan', lazy='dynamic')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'conditions': _json.loads(self.conditions) if self.conditions else {},
+            'is_enabled': self.is_enabled,
+            'trigger_count': self.trigger_count,
+            'last_triggered_at': self.last_triggered_at.isoformat() if self.last_triggered_at else None,
+            'priority': self.priority,
+            'cooldown_seconds': self.cooldown_seconds,
+            'actions': [a.to_dict() for a in self.actions],
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class RuleAction(db.Model):
+    """规则动作"""
+    __tablename__ = 'rule_actions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey('rules.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 动作类型: alarm / command / notification / webhook
+    action_type = db.Column(db.String(32), nullable=False)
+    
+    # 动作配置 (JSON)
+    # alarm: {"severity": "warning", "message": "温度过高"}
+    # command: {"device_id": 1, "command": "reboot"}
+    # notification: {"channel": "email", "recipients": ["admin@example.com"]}
+    # webhook: {"url": "https://...", "method": "POST", "headers": {...}}
+    config = db.Column(db.Text, nullable=False)
+    
+    # 执行顺序
+    order = db.Column(db.Integer, default=0, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'rule_id': self.rule_id,
+            'action_type': self.action_type,
+            'config': _json.loads(self.config) if self.config else {},
+            'order': self.order,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class RuleExecutionLog(db.Model):
+    """规则执行日志"""
+    __tablename__ = 'rule_execution_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey('rules.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.Integer, nullable=True, index=True)
+    
+    # 触发时的数据快照 (JSON)
+    trigger_data = db.Column(db.Text, nullable=True)
+    
+    # 执行结果
+    status = db.Column(db.String(16), nullable=False)  # success / failed / skipped
+    error_message = db.Column(db.String(500), nullable=True)
+    
+    # 执行的动作结果 (JSON)
+    action_results = db.Column(db.Text, nullable=True)
+    
+    executed_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    rule = db.relationship('Rule', backref=db.backref('execution_logs', cascade='all, delete-orphan', lazy='dynamic'))
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'rule_id': self.rule_id,
+            'rule_name': self.rule.name if self.rule else None,
+            'device_id': self.device_id,
+            'trigger_data': _json.loads(self.trigger_data) if self.trigger_data else None,
+            'status': self.status,
+            'error_message': self.error_message,
+            'action_results': _json.loads(self.action_results) if self.action_results else None,
+            'executed_at': self.executed_at.isoformat() if self.executed_at else None,
+        }
