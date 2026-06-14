@@ -239,3 +239,126 @@ class DataExportService:
         response.headers['Content-Type'] = content_type
         response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+    @staticmethod
+    def export_data_points_to_json(user_id, device_id=None, channel_id=None,
+                                  start_time=None, end_time=None, limit=10000):
+        """导出数据点到JSON"""
+        import json
+        
+        query = DataPoint.query.join(SlaveChannel).join(Device).filter(
+            Device.user_id == user_id
+        )
+        
+        if device_id:
+            query = query.filter(Device.id == device_id)
+        if channel_id:
+            query = query.filter(SlaveChannel.id == channel_id)
+        if start_time:
+            query = query.filter(DataPoint.timestamp >= start_time)
+        if end_time:
+            query = query.filter(DataPoint.timestamp <= end_time)
+        
+        query = query.order_by(DataPoint.timestamp.desc()).limit(limit)
+        data_points = query.all()
+        
+        result = {
+            'export_time': datetime.utcnow().isoformat(),
+            'total_count': len(data_points),
+            'data': [
+                {
+                    'id': dp.id,
+                    'device_name': dp.channel.device.name if dp.channel and dp.channel.device else '',
+                    'channel_name': dp.channel.name if dp.channel else '',
+                    'name': dp.name,
+                    'value': dp.value,
+                    'timestamp': dp.timestamp.isoformat() if dp.timestamp else None
+                }
+                for dp in data_points
+            ]
+        }
+        
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    
+    @staticmethod
+    def export_devices_to_json(user_id):
+        """导出设备列表到JSON"""
+        import json
+        
+        devices = Device.query.filter_by(user_id=user_id).all()
+        
+        result = {
+            'export_time': datetime.utcnow().isoformat(),
+            'total_count': len(devices),
+            'data': [
+                {
+                    'id': d.id,
+                    'name': d.name,
+                    'device_type': d.device_type,
+                    'voltage_mv': d.voltage_mv,
+                    'latitude': d.latitude,
+                    'longitude': d.longitude,
+                    'location_name': d.location_name,
+                    'is_online': d.is_online,
+                    'created_at': d.created_at.isoformat() if d.created_at else None
+                }
+                for d in devices
+            ]
+        }
+        
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    
+    @staticmethod
+    def export_alarms_to_json(user_id, start_time=None, end_time=None, is_read=None):
+        """导出报警记录到JSON"""
+        import json
+        
+        query = AlarmRecord.query.filter_by(user_id=user_id)
+        
+        if start_time:
+            query = query.filter(AlarmRecord.created_at >= start_time)
+        if end_time:
+            query = query.filter(AlarmRecord.created_at <= end_time)
+        if is_read is not None:
+            query = query.filter_by(is_read=is_read)
+        
+        alarms = query.order_by(AlarmRecord.created_at.desc()).all()
+        
+        result = {
+            'export_time': datetime.utcnow().isoformat(),
+            'total_count': len(alarms),
+            'data': [
+                {
+                    'id': a.id,
+                    'device_name': a.device_name,
+                    'channel_name': a.channel_name,
+                    'point_name': a.point_name,
+                    'value': a.value,
+                    'threshold': a.threshold,
+                    'condition': a.condition,
+                    'severity': a.severity,
+                    'message': a.message,
+                    'is_read': a.is_read,
+                    'created_at': a.created_at.isoformat() if a.created_at else None
+                }
+                for a in alarms
+            ]
+        }
+        
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    
+    @staticmethod
+    def export_rules_to_json(user_id):
+        """导出规则引擎配置到JSON"""
+        import json
+        from models.database import Rule
+        
+        rules = Rule.query.filter_by(user_id=user_id).all()
+        
+        result = {
+            'export_time': datetime.utcnow().isoformat(),
+            'total_count': len(rules),
+            'data': [r.to_dict() for r in rules]
+        }
+        
+        return json.dumps(result, ensure_ascii=False, indent=2)
