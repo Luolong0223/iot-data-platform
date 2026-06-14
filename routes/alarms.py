@@ -162,14 +162,14 @@ def clear_read_records():
 def get_stats():
     from sqlalchemy import func
 
-    # Count by level
+    # Count by severity (field is severity, not level)
     level_counts = db.session.query(
-        AlarmRecord.level,
+        AlarmRecord.severity,
         func.count(AlarmRecord.id)
     ).filter(
         AlarmRecord.user_id == current_user.id,
         AlarmRecord.is_read == False
-    ).group_by(AlarmRecord.level).all()
+    ).group_by(AlarmRecord.severity).all()
 
     stats = {
         'critical': 0,
@@ -197,13 +197,13 @@ def get_chart_stats():
     from sqlalchemy import func, Date, cast
     from datetime import datetime, timedelta
 
-    # By level
+    # By severity (field is severity, not level)
     level_counts = db.session.query(
-        AlarmRecord.level,
+        AlarmRecord.severity,
         func.count(AlarmRecord.id)
     ).filter(
         AlarmRecord.user_id == current_user.id
-    ).group_by(AlarmRecord.level).all()
+    ).group_by(AlarmRecord.severity).all()
 
     by_level = {'critical': 0, 'warning': 0, 'info': 0}
     for level, count in level_counts:

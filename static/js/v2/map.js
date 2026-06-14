@@ -69,7 +69,7 @@ class MapV2 {
 
     async loadDevices() {
         try {
-            const response = await apiRequest('/api/platform/devices?limit=200');
+            const response = await apiRequest('/api/devices?limit=200');
             
             if (response && response.success && response.devices) {
                 this.devices = response.devices;

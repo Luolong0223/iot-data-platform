@@ -179,7 +179,7 @@ class DashboardV2 {
 
     async loadDeviceDistribution() {
         try {
-            const response = await apiRequest('/api/dashboard/device-distribution-v2', 'GET');
+            const response = await apiRequest('/api/dashboard/device-distribution', 'GET');
             if (response && response.success && response.data) {
                 this.renderDeviceDistribution(response.data);
             } else {
