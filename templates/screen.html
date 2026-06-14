@@ -909,22 +909,24 @@ async function loadSelectedData() {
             var data = json.data || [];
             if (data.length > 0) {
                 selectedPoints[idx].value = data[0].value;
-                selectedPoints[idx].timestamp = data[0].timestamp;
+                selectedPoints[idx].timestamp = new Date().toISOString(); // 使用当前刷新时间
             }
         });
         
-        // 刷新表格
+        // 刷新表格 - 启用点击切换趋势
         var tbody = document.getElementById('selectedDataBody');
-        tbody.innerHTML = selectedPoints.map(function(p) {
+        tbody.innerHTML = selectedPoints.map(function(p, idx) {
             var val = p.value !== null && p.value !== undefined ? 
                 (typeof p.value === 'number' ? p.value.toFixed(4) : p.value) : '-';
-            var time = p.timestamp ? new Date(p.timestamp).toLocaleTimeString('zh-CN', {hour12: false}) : '-';
-            return '<tr>' +
+            var time = new Date().toLocaleTimeString('zh-CN', {hour12: false});
+            // 每一行添加点击事件，点击后趋势图切换到该数据点
+            var rowClass = (p._highlight) ? 'table-active selected-point-row' : 'selected-point-row';
+            return '<tr class="' + rowClass + '" style="cursor:pointer" onclick="switchTrendToPoint(' + idx + ')">' +
                 '<td>' + p.device_name + '</td>' +
                 '<td>' + p.channel_name + '</td>' +
                 '<td>' + p.point_name + '</td>' +
                 '<td class="text-end fw-bold text-success">' + val + '</td>' +
-                '<td class="text-end text-muted">' + time + '</td>' +
+                '<td class="text-end text-muted"><small>' + time + '</small></td>' +
                 '</tr>';
         }).join('');
         
@@ -935,27 +937,193 @@ async function loadSelectedData() {
     }
 }
 
-// 图表周期切换
-document.getElementById('chartPeriod').addEventListener('change', loadTrend);
-
-// 初始化
-document.addEventListener('DOMContentLoaded', function() {
-    initTrendChart();
-    loadStats();
-    loadTrend();
-    loadDevices();
-    loadAlarms();
-    loadRanks();
-    loadDeviceSelector();
-    connectSSE();
+// 切换到指定数据点的趋势
+function switchTrendToPoint(idx) {
+    if (!selectedPoints[idx]) return;
+    var p = selectedPoints[idx];
     
-    // 定时刷新
-    setInterval(loadStats, 10000);  // 10秒刷新统计
-    setInterval(loadTrend, 60000);  // 1分钟刷新趋势
-    setInterval(loadDevices, 30000); // 30秒刷新设备
-    setInterval(loadAlarms, 30000);  // 30秒刷新报警
-    setInterval(loadSelectedData, 5000); // 5秒刷新选中的数据点
-    setInterval(refreshSelectedPointsUI, 5000); // 5秒刷新标签值
+    // 清除其他高亮
+    selectedPoints.forEach(function(sp, i) {
+        sp._highlight = (i === idx);
+    });
+    
+    // 更新趋势图标题
+    document.getElementById('trendTitle').textContent = p.point_name + ' 趋势 (' + p.device_name + '/' + p.channel_name + ')';
+    
+    // 加载该数据点的历史趋势（使用 realtime/trend API，支持 channel_id+point_name）
+    var period = document.getElementById('chartPeriod').value;
+    fetch('/api/realtime/trend?channel_id=' + p.channel_id + '&point_name=' + encodeURIComponent(p.point_name) + '&period=' + period)
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+            if (json.success && json.data) {
+                trendChart.data.labels = json.data.labels || [];
+                trendChart.data.datasets[0].data = json.data.values || [];
+                trendChart.data.datasets[0].label = p.point_name + ' (' + p.device_name + ')';
+                trendChart.update();
+            }
+        })
+        .catch(function(e) { console.error('加载点趋势失败:', e); });
+}
+
+// ====== 持久化保存功能 ======
+
+// 从数据库加载已保存的选定点
+async function loadSavedPoints() {
+    try {
+        var res = await fetch('/api/screen/saved-points');
+        var json = await res.json();
+        if (!json.success) return;
+        
+        var savedPoints = json.data || [];
+        if (savedPoints.length === 0) return;
+        
+        // 清空并替换 selectedPoints
+        selectedPoints = savedPoints.map(function(sp) {
+            return {
+                key: sp.key,
+                id: sp.id,
+                device_id: sp.device_id,
+                device_name: sp.device_name,
+                channel_id: sp.channel_id,
+                channel_name: sp.channel_name,
+                point_name: sp.point_name,
+                value: sp.value,
+                timestamp: sp.timestamp || new Date().toISOString()
+            };
+        });
+        
+        refreshSelectedPointsUI();
+        loadSelectedData();
+    } catch (e) {
+        console.error('加载已保存数据点失败:', e);
+    }
+}
+
+// 保存数据点到数据库
+async function savePointToDB(point) {
+    try {
+        await fetch('/api/screen/saved-points', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                device_id: point.device_id,
+                device_name: point.device_name,
+                channel_id: point.channel_id,
+                channel_name: point.channel_name,
+                point_name: point.point_name
+            })
+        });
+    } catch (e) {
+        console.error('保存数据点失败:', e);
+    }
+}
+
+// 从数据库删除已保存的数据点
+async function deletePointFromDB(key) {
+    // 查找对应的 id
+    var point = selectedPoints.find(function(p) { return p.key === key; });
+    if (!point || !point.id) {
+        // 尝试用 device+channel+point_name 查找数据库
+        try {
+            var res = await fetch('/api/screen/saved-points');
+            var json = await res.json();
+            if (json.success) {
+                var found = (json.data || []).find(function(sp) { 
+                    return sp.device_id + '_' + sp.channel_id + '_' + sp.point_name === key;
+                });
+                if (found) {
+                    await fetch('/api/screen/saved-points/' + found.id, { method: 'DELETE' });
+                }
+            }
+        } catch(e) {}
+        return;
+    }
+    try {
+        await fetch('/api/screen/saved-points/' + point.id, { method: 'DELETE' });
+    } catch (e) {
+        console.error('删除数据点失败:', e);
+    }
+}
+
+// 添加选中数据点（重写）
+document.getElementById('btnAddPoint').addEventListener('click', function() {
+    var deviceEl = document.getElementById('selectorDevice');
+    var chEl = document.getElementById('selectorChannel');
+    var ptEl = document.getElementById('selectorPoint');
+    
+    var deviceId = deviceEl.value;
+    var deviceName = deviceEl.options[deviceEl.selectedIndex] ? deviceEl.options[deviceEl.selectedIndex].text.split(' [')[0] : '';
+    var channelId = chEl.value;
+    var channelName = chEl.options[chEl.selectedIndex] ? chEl.options[chEl.selectedIndex].text : '';
+    var pointName = ptEl.value;
+    
+    if (!deviceId || !channelId || !pointName) {
+        alert('请完整选择设备、通道和数据点');
+        return;
+    }
+    
+    // 检查是否已选
+    var key = deviceId + '_' + channelId + '_' + pointName;
+    var exists = selectedPoints.some(function(p) { return p.key === key; });
+    if (exists) {
+        alert('该数据点已添加');
+        return;
+    }
+    
+    var item = {
+        key: key,
+        device_id: parseInt(deviceId),
+        device_name: deviceName,
+        channel_id: parseInt(channelId),
+        channel_name: channelName,
+        point_name: pointName,
+        value: '-',
+        timestamp: new Date().toISOString()
+    };
+    selectedPoints.push(item);
+    refreshSelectedPointsUI();
+    loadSelectedData();
+    
+    // 保存到数据库（异步）
+    savePointToDB(item);
 });
+
+// 移除选中数据点（重写）
+async function removeSelectedPoint(key) {
+    // 从数据库删除
+    await deletePointFromDB(key);
+    
+    // 从本地移除
+    selectedPoints = selectedPoints.filter(function(p) { return p.key !== key; });
+    refreshSelectedPointsUI();
+    if (selectedPoints.length === 0) {
+        document.getElementById('selectedDataBody').innerHTML = 
+            '<tr><td colspan="5" class="text-center text-muted py-3">请添加要监控的数据点</td></tr>';
+        document.getElementById('dataRefreshTime').textContent = '--';
+        // 恢复趋势图为全局趋势
+        document.getElementById('trendTitle').textContent = '数据趋势';
+        loadTrend();
+    }
+}
+
+// 刷新已选数据点UI
+function refreshSelectedPointsUI() {
+    var container = document.getElementById('selectedPointsContainer');
+    document.getElementById('selectedCount').textContent = '已选 ' + selectedPoints.length + ' 个';
+    
+    if (selectedPoints.length === 0) {
+        container.innerHTML = '<span class="text-muted">暂无选择的数据点</span>';
+        return;
+    }
+    
+    container.innerHTML = selectedPoints.map(function(p) {
+        var val = p.value !== null && p.value !== undefined && p.value !== '-' ? 
+            (typeof p.value === 'number' ? p.value.toFixed(4) : p.value) : '-';
+        return '<span class="badge bg-info d-inline-flex align-items-center gap-1">' +
+            p.device_name + ' / ' + p.channel_name + ' / ' + p.point_name + ' = ' + val +
+            ' <a href="javascript:void(0)" class="text-light ms-1" onclick="removeSelectedPoint(\'' + p.key + '\')" style="text-decoration:none">&times;</a>' +
+            '</span>';
+    }).join('');
+}
 </script>
 {% endblock %}

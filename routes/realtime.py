@@ -213,23 +213,42 @@ def stats():
 @realtime_bp.route('/trend')
 @login_required
 def trend():
-    """获取数据趋势"""
+    """获取数据趋势（支持指定数据点）"""
     period = request.args.get('period', '24h')
+    channel_id = request.args.get('channel_id', type=int)
+    point_name = request.args.get('point_name')
     user_id = current_user.id
     
     # 确定时间范围
     now = datetime.now()
     if period == '7d':
         start = now - timedelta(days=7)
-        interval = 'hour'
     elif period == '30d':
         start = now - timedelta(days=30)
-        interval = 'day'
     else:  # 24h
         start = now - timedelta(hours=24)
-        interval = 'hour'
     
-    # 获取用户设备
+    # 如果指定了具体数据点，查询该点的数值趋势
+    if channel_id and point_name:
+        points = DataPoint.query.filter(
+            DataPoint.channel_id == channel_id,
+            DataPoint.name == point_name,
+            DataPoint.timestamp >= start
+        ).order_by(DataPoint.timestamp).all()
+        
+        labels = [p.timestamp.strftime('%H:%M') if period == '24h' else p.timestamp.strftime('%m-%d %H:%M') for p in points]
+        values = [p.value for p in points]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'labels': labels,
+                'values': values,
+                'title': f'{point_name} 趋势'
+            }
+        })
+    
+    # 没有指定数据点，返回整体数据量趋势（原有逻辑）
     devices = Device.query.filter_by(user_id=user_id).all()
     device_ids = [d.id for d in devices]
     
@@ -238,11 +257,11 @@ def trend():
             'success': True,
             'data': {
                 'labels': [],
-                'values': []
+                'values': [],
+                'title': '数据趋势'
             }
         })
     
-    # 获取通道
     channels = SlaveChannel.query.filter(SlaveChannel.device_id.in_(device_ids)).all()
     channel_ids = [c.id for c in channels]
     
@@ -251,15 +270,27 @@ def trend():
             'success': True,
             'data': {
                 'labels': [],
-                'values': []
+                'values': [],
+                'title': '数据趋势'
             }
         })
     
-    # 查询数据点
     from sqlalchemy import func
     
-    if interval == 'hour':
-        # 按小时分组
+    if period in ('7d', '30d'):
+        day_format = '%Y-%m-%d' if period == '30d' else '%Y-%m-%d %H:00'
+        query = db.session.query(
+            func.strftime(day_format, DataPoint.timestamp).label('t'),
+            func.count(DataPoint.id).label('count')
+        ).filter(
+            DataPoint.channel_id.in_(channel_ids),
+            DataPoint.timestamp >= start
+        ).group_by('t').order_by('t')
+        
+        results = query.all()
+        labels = [r.t for r in results]
+        values = [r.count for r in results]
+    else:  # 24h
         query = db.session.query(
             func.strftime('%Y-%m-%d %H:00', DataPoint.timestamp).label('hour'),
             func.count(DataPoint.id).label('count')
@@ -269,29 +300,15 @@ def trend():
         ).group_by('hour').order_by('hour')
         
         results = query.all()
-        
         labels = [r.hour for r in results]
-        values = [r.count for r in results]
-    else:
-        # 按天分组
-        query = db.session.query(
-            func.strftime('%Y-%m-%d', DataPoint.timestamp).label('day'),
-            func.count(DataPoint.id).label('count')
-        ).filter(
-            DataPoint.channel_id.in_(channel_ids),
-            DataPoint.timestamp >= start
-        ).group_by('day').order_by('day')
-        
-        results = query.all()
-        
-        labels = [r.day for r in results]
         values = [r.count for r in results]
     
     return jsonify({
         'success': True,
         'data': {
             'labels': labels,
-            'values': values
+            'values': values,
+            'title': '数据趋势'
         }
     })
 

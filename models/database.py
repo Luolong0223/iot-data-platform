@@ -1,9 +1,14 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 db = SQLAlchemy()
+
+
+# 获取上海时间（UTC+8）
+def _now():
+    return datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8)))
 
 
 class User(UserMixin, db.Model):
@@ -20,7 +25,7 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     last_login_at = db.Column(db.DateTime, nullable=True)
     last_login_ip = db.Column(db.String(45), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
 
     devices = db.relationship('Device', back_populates='user', cascade='all, delete-orphan', lazy='dynamic')
     tcp_logs = db.relationship('TcpLog', back_populates='user', cascade='all, delete-orphan', lazy='dynamic')
@@ -47,6 +52,36 @@ class User(UserMixin, db.Model):
         }
 
 
+class ScreenSelectedPoint(db.Model):
+    """用户大屏选定的数据点（持久化保存）"""
+    __tablename__ = 'screen_selected_points'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    device_id = db.Column(db.Integer, nullable=False)
+    device_name = db.Column(db.String(100), nullable=False)
+    channel_id = db.Column(db.Integer, nullable=False)
+    channel_name = db.Column(db.String(100), nullable=False)
+    point_name = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'device_id', 'channel_id', 'point_name', name='uq_user_screen_point'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'device_id': self.device_id,
+            'device_name': self.device_name,
+            'channel_id': self.channel_id,
+            'channel_name': self.channel_name,
+            'point_name': self.point_name,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
 class Project(db.Model):
     """项目表（第一层级）"""
     __tablename__ = 'projects'
@@ -58,8 +93,8 @@ class Project(db.Model):
     location = db.Column(db.String(200), nullable=True)
     color = db.Column(db.String(7), default='#3498db', nullable=False)
     sort_order = db.Column(db.Integer, default=0, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now, nullable=False)
 
     user = db.relationship('User', backref='projects')
     groups = db.relationship('DeviceGroup', back_populates='project', lazy='dynamic')
@@ -92,8 +127,8 @@ class DeviceGroup(db.Model):
     description = db.Column(db.String(500), nullable=True)
     color = db.Column(db.String(7), default='#3498db', nullable=False)
     sort_order = db.Column(db.Integer, default=0, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now, nullable=False)
 
     user = db.relationship('User', backref='device_groups')
     project = db.relationship('Project', back_populates='groups')
@@ -139,7 +174,7 @@ class Device(db.Model):
     storage_enabled = db.Column(db.Boolean, default=True, nullable=False)  # 是否存储数据
     maintenance_interval = db.Column(db.Integer, default=30)  # 维护周期（天）
     last_maintenance_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
 
     user = db.relationship('User', back_populates='devices')
     project = db.relationship('Project', backref='devices')
@@ -181,7 +216,7 @@ class SlaveChannel(db.Model):
     name = db.Column(db.String(100), nullable=False)
     online = db.Column(db.Boolean, default=False, nullable=False)
     last_data_at = db.Column(db.DateTime, nullable=True)  # 最后数据时间
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
 
     device = db.relationship('Device', back_populates='channels')
     data_points = db.relationship('DataPoint', back_populates='channel', cascade='all, delete-orphan', lazy='dynamic')
@@ -206,7 +241,7 @@ class DataPoint(db.Model):
     channel_id = db.Column(db.Integer, db.ForeignKey('slave_channels.id'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False, index=True)
     value = db.Column(db.Float, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, default=_now, nullable=False, index=True)
 
     # 复合索引优化查询性能
     __table_args__ = (
@@ -238,7 +273,7 @@ class TcpLog(db.Model):
     parsed = db.Column(db.Boolean, default=False, nullable=False, index=True)
     error_msg = db.Column(db.String(500), nullable=True)
     client_ip = db.Column(db.String(45), nullable=True)  # 客户端IP
-    received_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    received_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
 
     user = db.relationship('User', back_populates='tcp_logs')
 
@@ -266,7 +301,7 @@ class LoginLog(db.Model):
     user_agent = db.Column(db.String(500), nullable=True)
     success = db.Column(db.Boolean, default=True, nullable=False)
     failure_reason = db.Column(db.String(200), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
 
     user = db.relationship('User', back_populates='login_logs')
 
@@ -299,7 +334,7 @@ class AlarmRule(db.Model):
     notify_email = db.Column(db.Boolean, default=False, nullable=False)
     notify_sms = db.Column(db.Boolean, default=False, nullable=False)
     enabled = db.Column(db.Boolean, default=True, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
 
     user = db.relationship('User', backref='alarm_rules')
     alarm_records = db.relationship('AlarmRecord', backref='rule', lazy='dynamic')
@@ -340,7 +375,7 @@ class AlarmRecord(db.Model):
     is_handled = db.Column(db.Boolean, default=False, nullable=False)
     handled_by = db.Column(db.String(80), nullable=True)
     handled_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
 
     user = db.relationship('User', backref='alarm_records')
 
@@ -373,7 +408,7 @@ class SystemConfig(db.Model):
     key = db.Column(db.String(100), unique=True, nullable=False, index=True)
     value = db.Column(db.Text, nullable=True)
     description = db.Column(db.String(500), nullable=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now, nullable=False)
 
     def to_dict(self):
         return {
@@ -395,7 +430,7 @@ class NotificationConfig(db.Model):
     name = db.Column(db.String(100), nullable=False)
     config = db.Column(db.Text, nullable=False)  # JSON格式的配置
     enabled = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
 
     user = db.relationship('User', backref='notification_configs')
 
