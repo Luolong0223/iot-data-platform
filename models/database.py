@@ -1925,3 +1925,179 @@ class ConfigVersion(db.Model):
             'operator': self.operator,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
+
+
+# ========================================================================
+# API 网关 (API Gateway)
+# ========================================================================
+
+class APIKey(db.Model):
+    """API 密钥"""
+    __tablename__ = 'api_keys'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # API Key (唯一标识)
+    api_key = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    
+    # 密钥名称
+    name = db.Column(db.String(128), nullable=False)
+    
+    # 密钥描述
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 是否启用
+    enabled = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    
+    # 权限范围 (JSON 数组)
+    permissions = db.Column(db.Text, nullable=True)
+    
+    # 限流配置
+    rate_limit_per_minute = db.Column(db.Integer, default=60, nullable=False)
+    rate_limit_per_hour = db.Column(db.Integer, default=1000, nullable=False)
+    rate_limit_per_day = db.Column(db.Integer, default=10000, nullable=False)
+    
+    # 过期时间
+    expires_at = db.Column(db.DateTime, nullable=True)
+    
+    # 最后使用时间
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    
+    # 使用统计
+    total_requests = db.Column(db.Integer, default=0, nullable=False)
+    total_errors = db.Column(db.Integer, default=0, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='api_keys')
+    usage_logs = db.relationship('APIUsageLog', backref='api_key_obj', cascade='all, delete-orphan', lazy='dynamic')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'api_key': self.api_key[:8] + '...' + self.api_key[-4:] if self.api_key else None,  # 部分隐藏
+            'name': self.name,
+            'description': self.description,
+            'enabled': self.enabled,
+            'permissions': _json.loads(self.permissions) if self.permissions else None,
+            'rate_limit_per_minute': self.rate_limit_per_minute,
+            'rate_limit_per_hour': self.rate_limit_per_hour,
+            'rate_limit_per_day': self.rate_limit_per_day,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+            'total_requests': self.total_requests,
+            'total_errors': self.total_errors,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+    
+    def to_dict_full(self):
+        """返回完整 API Key (仅创建时使用)"""
+        import json as _json
+        return {
+            'id': self.id,
+            'api_key': self.api_key,  # 完整显示
+            'name': self.name,
+            'description': self.description,
+            'enabled': self.enabled,
+            'permissions': _json.loads(self.permissions) if self.permissions else None,
+            'rate_limit_per_minute': self.rate_limit_per_minute,
+            'rate_limit_per_hour': self.rate_limit_per_hour,
+            'rate_limit_per_day': self.rate_limit_per_day,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+            'total_requests': self.total_requests,
+            'total_errors': self.total_errors,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class APIUsageLog(db.Model):
+    """API 使用日志"""
+    __tablename__ = 'api_usage_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    api_key_id = db.Column(db.Integer, db.ForeignKey('api_keys.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    # 请求信息
+    endpoint = db.Column(db.String(255), nullable=False, index=True)
+    method = db.Column(db.String(10), nullable=False)
+    
+    # 响应信息
+    status_code = db.Column(db.Integer, nullable=False)
+    response_time_ms = db.Column(db.Integer, nullable=True)
+    
+    # 客户端信息
+    ip_address = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    
+    # 是否成功
+    success = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    
+    # 错误信息
+    error_message = db.Column(db.String(500), nullable=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'api_key_id': self.api_key_id,
+            'endpoint': self.endpoint,
+            'method': self.method,
+            'status_code': self.status_code,
+            'response_time_ms': self.response_time_ms,
+            'ip_address': self.ip_address,
+            'user_agent': self.user_agent,
+            'success': self.success,
+            'error_message': self.error_message,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class APIUsageStats(db.Model):
+    """API 使用统计 (按小时聚合)"""
+    __tablename__ = 'api_usage_stats'
+
+    id = db.Column(db.Integer, primary_key=True)
+    api_key_id = db.Column(db.Integer, db.ForeignKey('api_keys.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    # 统计周期
+    period_start = db.Column(db.DateTime, nullable=False, index=True)
+    period_end = db.Column(db.DateTime, nullable=False, index=True)
+    
+    # 统计数据
+    total_requests = db.Column(db.Integer, default=0, nullable=False)
+    successful_requests = db.Column(db.Integer, default=0, nullable=False)
+    failed_requests = db.Column(db.Integer, default=0, nullable=False)
+    
+    # 性能统计
+    avg_response_time_ms = db.Column(db.Float, default=0.0, nullable=False)
+    max_response_time_ms = db.Column(db.Integer, default=0, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('api_key_id', 'period_start', name='uq_api_usage_stats'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'api_key_id': self.api_key_id,
+            'period_start': self.period_start.isoformat() if self.period_start else None,
+            'period_end': self.period_end.isoformat() if self.period_end else None,
+            'total_requests': self.total_requests,
+            'successful_requests': self.successful_requests,
+            'failed_requests': self.failed_requests,
+            'success_rate': round(self.successful_requests / self.total_requests * 100, 2) if self.total_requests > 0 else 0,
+            'avg_response_time_ms': self.avg_response_time_ms,
+            'max_response_time_ms': self.max_response_time_ms,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
