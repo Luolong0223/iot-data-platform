@@ -457,32 +457,52 @@ class DeviceShadow(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
     # 期望状态（云端 → 设备）
     desired_state = db.Column(db.Text, nullable=True)
+    desired_version = db.Column(db.Integer, default=1, nullable=False)
+    desired_updated_at = db.Column(db.DateTime, nullable=True)
+    
     # 报告状态（设备 → 云端）
     reported_state = db.Column(db.Text, nullable=True)
-    # 元数据：版本号、最后同步时间等
-    version = db.Column(db.BigInteger, default=1, nullable=False)
+    reported_version = db.Column(db.Integer, default=1, nullable=False)
+    reported_updated_at = db.Column(db.DateTime, nullable=True)
+    
+    # 同步状态: pending/syncing/synced/failed
+    sync_status = db.Column(db.String(16), default='pending', nullable=False, index=True)
     last_sync_at = db.Column(db.DateTime, nullable=True)
+    sync_error = db.Column(db.String(500), nullable=True)
+    
+    # 在线状态
     is_online = db.Column(db.Boolean, default=False, nullable=False)
+    
     # 元信息（JSON）：包含最新数据点摘要
     metadata_json = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=_now, nullable=False)
     updated_at = db.Column(db.DateTime, default=_now, onupdate=_now, nullable=False)
 
-    device = db.relationship('Device', backref=db.backref('shadow', uselist=False))
+    device = db.relationship('Device', backref=db.backref('shadow', uselist=False, cascade='all, delete-orphan'))
+    user = db.relationship('User', backref='device_shadows')
 
     def to_dict(self):
         import json
         return {
             'id': self.id,
             'device_id': self.device_id,
+            'device_name': self.device.name if self.device else None,
             'desired_state': json.loads(self.desired_state) if self.desired_state else {},
+            'desired_version': self.desired_version,
+            'desired_updated_at': self.desired_updated_at.isoformat() if self.desired_updated_at else None,
             'reported_state': json.loads(self.reported_state) if self.reported_state else {},
-            'version': self.version,
+            'reported_version': self.reported_version,
+            'reported_updated_at': self.reported_updated_at.isoformat() if self.reported_updated_at else None,
+            'sync_status': self.sync_status,
             'last_sync_at': self.last_sync_at.isoformat() if self.last_sync_at else None,
+            'sync_error': self.sync_error,
             'is_online': self.is_online,
             'metadata': json.loads(self.metadata_json) if self.metadata_json else {},
+            'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
@@ -902,4 +922,38 @@ class OtaDeviceTask(db.Model):
             'error_message': self.error_message,
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'finished_at': self.finished_at.isoformat() if self.finished_at else None,
+        }
+
+
+class ShadowHistory(db.Model):
+    """设备影子变更历史"""
+    __tablename__ = 'shadow_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    shadow_id = db.Column(db.Integer, db.ForeignKey('device_shadows.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.Integer, nullable=False, index=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    
+    change_type = db.Column(db.String(16), nullable=False)  # desired_update / reported_update / sync
+    old_state = db.Column(db.Text, nullable=True)  # JSON
+    new_state = db.Column(db.Text, nullable=True)  # JSON
+    version = db.Column(db.Integer, nullable=False)
+    
+    operator = db.Column(db.String(64), nullable=True)  # user/system/device
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    shadow = db.relationship('DeviceShadow', backref=db.backref('history', cascade='all, delete-orphan', lazy='dynamic'))
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'shadow_id': self.shadow_id,
+            'device_id': self.device_id,
+            'change_type': self.change_type,
+            'old_state': _json.loads(self.old_state) if self.old_state else None,
+            'new_state': _json.loads(self.new_state) if self.new_state else None,
+            'version': self.version,
+            'operator': self.operator,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }

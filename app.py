@@ -142,6 +142,8 @@ def create_app(config_name=None):
     app.register_blueprint(alarm_engine_bp)
     from routes.ota import ota_bp
     app.register_blueprint(ota_bp)
+    from routes.shadow import shadow_bp
+    app.register_blueprint(shadow_bp)
 
     app.register_blueprint(docs_bp)
 
@@ -151,6 +153,7 @@ def create_app(config_name=None):
     csrf.exempt(rbac_bp)
     csrf.exempt(alarm_engine_bp)
     csrf.exempt(ota_bp)
+    csrf.exempt(shadow_bp)
     csrf.exempt(docs_bp)
 
     with app.app_context():
