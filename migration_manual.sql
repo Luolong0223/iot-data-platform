@@ -1,115 +1,111 @@
 -- ============================================================
--- IoT Data Platform 精准迁移脚本 (v2)
+-- IoT Data Platform 一键迁移脚本 (v3)
 -- ============================================================
--- 基于真实模型(models/database.py)生成的列清单
--- 关键改进:
---   1. 用存储过程 + INFORMATION_SCHEMA 检测列是否存在
---   2. 重复执行不会报错
---   3. 列定义完全匹配模型
+-- 不使用 DELIMITER/存储过程,纯 SET+PREPARE+EXECUTE,可直接管道给 mysql
+-- 用法: curl ... | mysql -u X -p Y
+-- 重复执行安全(检测列已存在则跳过)
 -- ============================================================
 
 SET NAMES utf8mb4;
 
--- 删掉可能存在的旧过程
-DROP PROCEDURE IF EXISTS add_column_if_missing;
+-- ============ users 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'last_login') = 0, 'ALTER TABLE `users` ADD COLUMN `last_login` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
-DELIMITER //
+-- ============ devices 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'total_packets') = 0, 'ALTER TABLE `devices` ADD COLUMN `total_packets` INT DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'custom_name') = 0, 'ALTER TABLE `devices` ADD COLUMN `custom_name` VARCHAR(100) NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'voltage_mv') = 0, 'ALTER TABLE `devices` ADD COLUMN `voltage_mv` INT DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'category_id') = 0, 'ALTER TABLE `devices` ADD COLUMN `category_id` INT NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'is_online') = 0, 'ALTER TABLE `devices` ADD COLUMN `is_online` TINYINT(1) DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'last_seen') = 0, 'ALTER TABLE `devices` ADD COLUMN `last_seen` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'first_seen') = 0, 'ALTER TABLE `devices` ADD COLUMN `first_seen` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
-CREATE PROCEDURE add_column_if_missing(
-    IN p_table VARCHAR(64),
-    IN p_column VARCHAR(64),
-    IN p_definition VARCHAR(255)
-)
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = p_table
-          AND COLUMN_NAME = p_column
-    ) THEN
-        SET @sql = CONCAT('ALTER TABLE `', p_table, '` ADD COLUMN `', p_column, '` ', p_definition);
-        PREPARE stmt FROM @sql;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-        SELECT CONCAT('✅ 已添加 ', p_table, '.', p_column) AS result;
-    ELSE
-        SELECT CONCAT('⏭️  ', p_table, '.', p_column, ' 已存在,跳过') AS result;
-    END IF;
-END //
+-- ============ channels 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'channels' AND COLUMN_NAME = 'is_online') = 0, 'ALTER TABLE `channels` ADD COLUMN `is_online` TINYINT(1) DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'channels' AND COLUMN_NAME = 'last_seen') = 0, 'ALTER TABLE `channels` ADD COLUMN `last_seen` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'channels' AND COLUMN_NAME = 'first_seen') = 0, 'ALTER TABLE `channels` ADD COLUMN `first_seen` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
-DELIMITER ;
+-- ============ data_points 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'data_points' AND COLUMN_NAME = 'value') = 0, 'ALTER TABLE `data_points` ADD COLUMN `value` FLOAT DEFAULT 0.0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'data_points' AND COLUMN_NAME = 'last_value') = 0, 'ALTER TABLE `data_points` ADD COLUMN `last_value` FLOAT DEFAULT 0.0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'data_points' AND COLUMN_NAME = 'last_updated') = 0, 'ALTER TABLE `data_points` ADD COLUMN `last_updated` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'data_points' AND COLUMN_NAME = 'update_count') = 0, 'ALTER TABLE `data_points` ADD COLUMN `update_count` INT DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
--- ============================================================
--- 1. users 表 (id, username, email, password_hash, is_active, is_admin, created_at, last_login)
--- ============================================================
-CALL add_column_if_missing('users', 'last_login', 'DATETIME NULL');
+-- ============ data_history 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'data_history' AND COLUMN_NAME = 'value') = 0, 'ALTER TABLE `data_history` ADD COLUMN `value` FLOAT DEFAULT 0.0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'data_history' AND COLUMN_NAME = 'timestamp') = 0, 'ALTER TABLE `data_history` ADD COLUMN `timestamp` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
--- ============================================================
--- 2. devices 表 (id, name, custom_name, voltage_mv, category_id, user_id, is_online, last_seen, first_seen, total_packets)
--- ============================================================
-CALL add_column_if_missing('devices', 'last_seen', 'DATETIME NULL');
+-- ============ dashboard_widgets 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dashboard_widgets' AND COLUMN_NAME = 'sort_order') = 0, 'ALTER TABLE `dashboard_widgets` ADD COLUMN `sort_order` INT DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dashboard_widgets' AND COLUMN_NAME = 'is_visible') = 0, 'ALTER TABLE `dashboard_widgets` ADD COLUMN `is_visible` TINYINT(1) DEFAULT 1', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dashboard_widgets' AND COLUMN_NAME = 'color') = 0, 'ALTER TABLE `dashboard_widgets` ADD COLUMN `color` VARCHAR(20)', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dashboard_widgets' AND COLUMN_NAME = 'created_at') = 0, 'ALTER TABLE `dashboard_widgets` ADD COLUMN `created_at` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
--- ============================================================
--- 3. channels 表 (id, device_id, name, is_online, last_seen, first_seen)
--- ============================================================
--- 全部已在模型中,但保险起见都补一下
-CALL add_column_if_missing('channels', 'last_seen', 'DATETIME NULL');
-CALL add_column_if_missing('channels', 'first_seen', 'DATETIME NULL');
+-- ============ tcp_server_configs 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_server_configs' AND COLUMN_NAME = 'is_active') = 0, 'ALTER TABLE `tcp_server_configs` ADD COLUMN `is_active` TINYINT(1) DEFAULT 1', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_server_configs' AND COLUMN_NAME = 'description') = 0, 'ALTER TABLE `tcp_server_configs` ADD COLUMN `description` VARCHAR(255) NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_server_configs' AND COLUMN_NAME = 'created_at') = 0, 'ALTER TABLE `tcp_server_configs` ADD COLUMN `created_at` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_server_configs' AND COLUMN_NAME = 'last_started') = 0, 'ALTER TABLE `tcp_server_configs` ADD COLUMN `last_started` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_server_configs' AND COLUMN_NAME = 'total_connections') = 0, 'ALTER TABLE `tcp_server_configs` ADD COLUMN `total_connections` INT DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_server_configs' AND COLUMN_NAME = 'total_messages') = 0, 'ALTER TABLE `tcp_server_configs` ADD COLUMN `total_messages` INT DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_server_configs' AND COLUMN_NAME = 'error_count') = 0, 'ALTER TABLE `tcp_server_configs` ADD COLUMN `error_count` INT DEFAULT 0', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
--- ============================================================
--- 4. data_points 表 (id, channel_id, name, value, last_value, last_updated, update_count)
--- ============================================================
-CALL add_column_if_missing('data_points', 'last_value', 'FLOAT DEFAULT 0.0');
-CALL add_column_if_missing('data_points', 'last_updated', 'DATETIME NULL');
-CALL add_column_if_missing('data_points', 'update_count', 'INT DEFAULT 0');
+-- ============ tcp_logs 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_logs' AND COLUMN_NAME = 'client_ip') = 0, 'ALTER TABLE `tcp_logs` ADD COLUMN `client_ip` VARCHAR(50) NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_logs' AND COLUMN_NAME = 'direction') = 0, 'ALTER TABLE `tcp_logs` ADD COLUMN `direction` VARCHAR(10) NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_logs' AND COLUMN_NAME = 'content') = 0, 'ALTER TABLE `tcp_logs` ADD COLUMN `content` TEXT NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_logs' AND COLUMN_NAME = 'status') = 0, 'ALTER TABLE `tcp_logs` ADD COLUMN `status` VARCHAR(20)', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_logs' AND COLUMN_NAME = 'error_message') = 0, 'ALTER TABLE `tcp_logs` ADD COLUMN `error_message` TEXT NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tcp_logs' AND COLUMN_NAME = 'timestamp') = 0, 'ALTER TABLE `tcp_logs` ADD COLUMN `timestamp` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
--- ============================================================
--- 5. data_history 表 (id, data_point_id, device_id, channel_id, value, timestamp)
--- ============================================================
--- 全部已在模型中
+-- ============ system_configs 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'system_configs' AND COLUMN_NAME = 'description') = 0, 'ALTER TABLE `system_configs` ADD COLUMN `description` VARCHAR(255) NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'system_configs' AND COLUMN_NAME = 'updated_at') = 0, 'ALTER TABLE `system_configs` ADD COLUMN `updated_at` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
--- ============================================================
--- 6. dashboard_widgets 表 (id, user_id, device_id, channel_id, data_point_id, sort_order, is_visible, color, created_at)
--- ============================================================
--- 全部已在模型中
-
--- ============================================================
--- 7. tcp_server_configs 表 (id, name, port, host, is_active, description, created_at, last_started, total_connections, total_messages, error_count)
--- ============================================================
-CALL add_column_if_missing('tcp_server_configs', 'last_started', 'DATETIME NULL');
-CALL add_column_if_missing('tcp_server_configs', 'total_connections', 'INT DEFAULT 0');
-CALL add_column_if_missing('tcp_server_configs', 'total_messages', 'INT DEFAULT 0');
-CALL add_column_if_missing('tcp_server_configs', 'error_count', 'INT DEFAULT 0');
-
--- ============================================================
--- 8. tcp_logs 表 (id, port, client_ip, direction, content, status, error_message, timestamp)
--- ============================================================
--- 全部已在模型中
-
--- ============================================================
--- 9. system_configs 表 (id, key, value, description, updated_at)
--- ============================================================
--- 全部已在模型中
-
--- ============================================================
--- 10. login_logs 表 (id, user_id, username, ip, user_agent, status, timestamp) ❗ 缺 ip 列
--- ============================================================
-CALL add_column_if_missing('login_logs', 'ip', 'VARCHAR(50) NULL');
-CALL add_column_if_missing('login_logs', 'user_agent', 'VARCHAR(255) NULL');
-
--- ============================================================
--- 验证关键表
--- ============================================================
-SELECT '===================== 验证 users 表 =====================' AS step;
-DESCRIBE users;
-
-SELECT '===================== 验证 devices 表 =====================' AS step;
-DESCRIBE devices;
-
-SELECT '===================== 验证 login_logs 表 =====================' AS step;
-DESCRIBE login_logs;
-
-SELECT '===================== 验证 data_points 表 =====================' AS step;
-DESCRIBE data_points;
+-- ============ login_logs 表 ============
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'login_logs' AND COLUMN_NAME = 'user_agent') = 0, 'ALTER TABLE `login_logs` ADD COLUMN `user_agent` VARCHAR(255) NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'login_logs' AND COLUMN_NAME = 'ip') = 0, 'ALTER TABLE `login_logs` ADD COLUMN `ip` VARCHAR(50) NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'login_logs' AND COLUMN_NAME = 'status') = 0, 'ALTER TABLE `login_logs` ADD COLUMN `status` VARCHAR(20)', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+SET @sql = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'login_logs' AND COLUMN_NAME = 'timestamp') = 0, 'ALTER TABLE `login_logs` ADD COLUMN `timestamp` DATETIME NULL', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
 SELECT '✅ 全部迁移完成' AS done;
