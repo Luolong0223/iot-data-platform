@@ -117,10 +117,9 @@ def get_trend():
         start_time = end_time - timedelta(hours=hours)
         
         # 构建查询 - 兼容MySQL和SQLite
-        from config import get_config
-        db_config = get_config()
+        db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
         
-        if 'mysql' in str(db_config.get('SQLALCHEMY_DATABASE_URI', '')).lower():
+        if 'mysql' in str(db_uri).lower():
             # MySQL 使用 DATE_FORMAT
             query = db.session.query(
                 func.date_format(DataPoint.timestamp, '%Y-%m-%d %H:00').label('hour'),
@@ -260,19 +259,19 @@ def get_device_ranking():
 @login_required
 def get_recent_alarms():
     """获取最新报警"""
-    from models.database import db, Device, Alarm
+    from models.database import db, AlarmRecord
     
     try:
         limit = request.args.get('limit', 10, type=int)
         
-        # 构建查询
-        query = Alarm.query.join(Device)
+        # 构建查询 - AlarmRecord使用device_name字段而非device关系
+        query = AlarmRecord.query
         
         # 权限过滤
         if not current_user.is_admin:
-            query = query.filter(Device.user_id == current_user.id)
+            query = query.filter(AlarmRecord.user_id == current_user.id)
         
-        query = query.order_by(desc(Alarm.created_at)).limit(limit)
+        query = query.order_by(desc(AlarmRecord.created_at)).limit(limit)
         
         results = query.all()
         
@@ -281,11 +280,14 @@ def get_recent_alarms():
         for alarm in results:
             alarms.append({
                 'id': alarm.id,
-                'device_name': alarm.device.name if alarm.device else None,
-                'alarm_type': alarm.alarm_type,
-                'alarm_level': alarm.alarm_level,
+                'device_name': alarm.device_name,
+                'channel_name': alarm.channel_name,
+                'severity': alarm.severity,
                 'message': alarm.message,
+                'value': alarm.value,
+                'threshold': alarm.threshold,
                 'is_read': alarm.is_read,
+                'is_handled': alarm.is_handled,
                 'created_at': alarm.created_at.strftime('%Y-%m-%d %H:%M:%S') if alarm.created_at else None
             })
         
@@ -295,6 +297,91 @@ def get_recent_alarms():
         })
     except Exception as e:
         current_app.logger.error(f"获取最新报警失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/dashboard/active-devices')
+@login_required
+def get_active_devices():
+    """获取活跃设备列表"""
+    from models.database import db, Device, SlaveChannel, DataPoint
+    
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        
+        # 获取有数据的设备
+        query = db.session.query(
+            Device.id, Device.name, Device.device_type, Device.is_online,
+            Device.location_name, Device.last_seen_at,
+            func.count(DataPoint.id).label('data_count'),
+            func.max(DataPoint.timestamp).label('last_data_time')
+        ).join(SlaveChannel, SlaveChannel.device_id == Device.id
+        ).join(DataPoint, DataPoint.channel_id == SlaveChannel.id
+        ).group_by(Device.id
+        ).order_by(desc('last_data_time')
+        ).limit(limit)
+        
+        if not current_user.is_admin:
+            query = query.filter(Device.user_id == current_user.id)
+        
+        results = query.all()
+        
+        devices = []
+        for row in results:
+            devices.append({
+                'id': row.id,
+                'name': row.name,
+                'device_type': row.device_type or '未知',
+                'is_online': row.is_online,
+                'location_name': row.location_name or '-',
+                'last_seen_at': row.last_seen_at.strftime('%Y-%m-%d %H:%M:%S') if row.last_seen_at else '-',
+                'last_data_time': row.last_data_time.strftime('%Y-%m-%d %H:%M:%S') if row.last_data_time else '-',
+                'data_count': row.data_count
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': devices
+        })
+    except Exception as e:
+        current_app.logger.error(f"获取活跃设备失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@dashboard_bp.route('/api/dashboard/recent-data')
+@login_required
+def recent_data():
+    """获取最新数据点"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        from models.database import DataPoint, SlaveChannel, Device
+        
+        query = DataPoint.query.join(
+            SlaveChannel, SlaveChannel.id == DataPoint.channel_id
+        ).join(
+            Device, Device.id == SlaveChannel.device_id
+        ).order_by(DataPoint.timestamp.desc())
+        
+        if not current_user.is_admin:
+            query = query.filter(Device.user_id == current_user.id)
+        
+        results = query.limit(limit).all()
+        
+        data = []
+        for dp in results:
+            channel = dp.channel
+            device = channel.device if channel else None
+            data.append({
+                'id': dp.id,
+                'device_name': device.name if device else '-',
+                'channel_name': channel.name if channel else '-',
+                'data_value': dp.value,
+                'timestamp': dp.timestamp.strftime('%Y-%m-%d %H:%M:%S') if dp.timestamp else '-'
+            })
+        
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        current_app.logger.error(f"获取最新数据失败: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

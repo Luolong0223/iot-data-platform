@@ -294,17 +294,15 @@ def get_screen_summary():
     from models.database import db, Device, SlaveChannel, DataPoint, AlarmRecord
     
     try:
+        # 今日起始时间
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        
         # 设备统计
         if current_user.is_admin:
             total_devices = Device.query.count()
             online_devices = Device.query.filter_by(is_online=True).count()
             total_alarms = AlarmRecord.query.filter_by(is_handled=False).count()
-            
-            # 今日数据点
-            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             today_data_points = DataPoint.query.filter(DataPoint.timestamp >= today_start).count()
-            
-            # 获取设备列表（带位置信息）
             devices = Device.query.limit(100).all()
         else:
             total_devices = Device.query.filter_by(user_id=current_user.id).count()
