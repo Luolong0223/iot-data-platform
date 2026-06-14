@@ -97,6 +97,13 @@ def screen():
     return render_template('screen.html')
 
 
+@pages_bp.route('/platform')
+@login_required
+def platform():
+    """平台增强中心：设备影子/标签/命令/协议/通知/审计/报表"""
+    return render_template('platform.html')
+
+
 @pages_bp.route('/admin')
 @login_required
 def admin():

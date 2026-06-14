@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}平台增强 - {{ super() }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-stars"></i> 平台增强中心</h4>
+        <div>
+            <button class="btn btn-sm btn-outline-primary" onclick="location.reload()"><i class="bi bi-arrow-clockwise"></i> 刷新</button>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-shadow"><i class="bi bi-cast"></i> 设备影子</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-tags"><i class="bi bi-tags"></i> 设备标签</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-commands"><i class="bi bi-terminal"></i> 设备命令</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-protocols"><i class="bi bi-hdd-network"></i> 协议接入</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-notifications"><i class="bi bi-bell"></i> 通知日志</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-messages"><i class="bi bi-mailbox"></i> 站内信</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-audit"><i class="bi bi-shield-check"></i> 审计日志</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-reports"><i class="bi bi-file-earmark-text"></i> 报表任务</a></li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- 设备影子 -->
+        <div class="tab-pane fade show active" id="tab-shadow">
+            <div class="card"><div class="card-body">
+                <p class="text-muted small">设备影子用于维护设备的虚拟状态。设备离线时仍可查询最后已知状态，可设置期望状态待设备上线后同步。</p>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead><tr>
+                            <th>设备</th><th>在线</th><th>影子版本</th><th>期望状态</th><th>报告状态</th><th>更新时间</th><th>操作</th>
+                        </tr></thead>
+                        <tbody id="shadowTbody"><tr><td colspan="7" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div></div>
+        </div>
+
+        <!-- 设备标签 -->
+        <div class="tab-pane fade" id="tab-tags">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="card"><div class="card-header">标签列表</div>
+                    <div class="card-body">
+                        <form id="tagForm" class="d-flex gap-2 mb-2">
+                            <input class="form-control form-control-sm" name="name" placeholder="标签名" required>
+                            <input class="form-control form-control-sm" name="color" type="color" value="#0d6efd" style="width:50px">
+                            <button class="btn btn-sm btn-primary">+</button>
+                        </form>
+                        <div id="tagList" class="list-group list-group-flush small"></div>
+                    </div></div>
+                </div>
+                <div class="col-md-8">
+                    <div class="card"><div class="card-header">设备标签分配</div>
+                    <div class="card-body">
+                        <div class="row mb-2">
+                            <div class="col"><select class="form-select form-select-sm" id="assignDevice"></select></div>
+                            <div class="col"><select class="form-select form-select-sm" id="assignTag"></select></div>
+                            <div class="col-auto"><button class="btn btn-sm btn-success" id="btnAssign">分配</button></div>
+                        </div>
+                        <div id="deviceTagMap" class="small"></div>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设备命令 -->
+        <div class="tab-pane fade" id="tab-commands">
+            <div class="card"><div class="card-body">
+                <p class="text-muted small">设备命令用于向下位机发送指令，常见用途：远程开关、重启、参数配置等。</p>
+                <form id="cmdForm" class="row g-2 mb-3">
+                    <div class="col-md-3"><select class="form-select form-select-sm" name="device_id" id="cmdDevice" required></select></div>
+                    <div class="col-md-2"><input class="form-control form-control-sm" name="command" placeholder="命令名" required></div>
+                    <div class="col-md-5"><input class="form-control form-control-sm" name="payload" placeholder='JSON: {"key":"value"}'></div>
+                    <div class="col-md-2"><button class="btn btn-sm btn-primary w-100">下发命令</button></div>
+                </form>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>时间</th><th>设备</th><th>命令</th><th>载荷</th><th>状态</th><th>结果</th></tr></thead>
+                        <tbody id="cmdTbody"><tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div></div>
+        </div>
+
+        <!-- 协议接入 -->
+        <div class="tab-pane fade" id="tab-protocols">
+            <div class="card"><div class="card-body">
+                <p class="text-muted small">支持多种协议接入：Modbus TCP 主动轮询 / HTTP 推送 / 自定义协议解析器。</p>
+                <form id="protocolForm" class="row g-2 mb-3">
+                    <div class="col-md-2"><input class="form-control form-control-sm" name="name" placeholder="名称" required></div>
+                    <div class="col-md-2"><select class="form-select form-select-sm" name="protocol_type">
+                        <option value="modbus_tcp">Modbus TCP</option>
+                        <option value="http_in">HTTP 推送</option>
+                    </select></div>
+                    <div class="col-md-2"><input class="form-control form-control-sm" name="host" placeholder="主机/地址"></div>
+                    <div class="col-md-1"><input class="form-control form-control-sm" name="port" type="number" placeholder="端口" value="502"></div>
+                    <div class="col-md-3"><input class="form-control form-control-sm" name="config" placeholder='配置 JSON'></div>
+                    <div class="col-md-2"><button class="btn btn-sm btn-primary w-100">添加</button></div>
+                </form>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>名称</th><th>类型</th><th>主机:端口</th><th>状态</th><th>最后心跳</th><th>操作</th></tr></thead>
+                        <tbody id="protocolTbody"><tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div></div>
+        </div>
+
+        <!-- 通知日志 -->
+        <div class="tab-pane fade" id="tab-notifications">
+            <div class="card"><div class="card-body">
+                <p class="text-muted small">所有已发送通知的历史记录（邮件/钉钉/企业微信/Webhook/站内信）。</p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>时间</th><th>渠道</th><th>目标</th><th>主题</th><th>状态</th><th>错误</th></tr></thead>
+                        <tbody id="notifTbody"><tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div></div>
+        </div>
+
+        <!-- 站内信 -->
+        <div class="tab-pane fade" id="tab-messages">
+            <div class="card"><div class="card-body">
+                <p class="text-muted small">系统通知、告警消息、命令执行结果等站内信。</p>
+                <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-primary" id="btnMsgAll">全部</button>
+                    <button class="btn btn-sm btn-outline-warning" id="btnMsgUnread">未读</button>
+                    <button class="btn btn-sm btn-outline-success" id="btnMsgReadAll">全部标为已读</button>
+                </div>
+                <div id="msgList"></div>
+            </div></div>
+        </div>
+
+        <!-- 审计日志 -->
+        <div class="tab-pane fade" id="tab-audit">
+            <div class="card"><div class="card-body">
+                <p class="text-muted small">记录所有用户关键操作，可用于安全审计与行为回溯。</p>
+                <form id="auditFilter" class="row g-2 mb-3">
+                    <div class="col-md-2"><select class="form-select form-select-sm" name="action">
+                        <option value="">所有操作</option>
+                        <option value="login">登录</option>
+                        <option value="logout">登出</option>
+                        <option value="create">新增</option>
+                        <option value="update">更新</option>
+                        <option value="delete">删除</option>
+                    </select></div>
+                    <div class="col-md-3"><input class="form-control form-control-sm" name="resource" placeholder="资源类型"></div>
+                    <div class="col-md-2"><button class="btn btn-sm btn-primary w-100">筛选</button></div>
+                </form>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>时间</th><th>用户</th><th>操作</th><th>资源</th><th>详情</th><th>IP</th></tr></thead>
+                        <tbody id="auditTbody"><tr><td colspan="6" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div></div>
+        </div>
+
+        <!-- 报表 -->
+        <div class="tab-pane fade" id="tab-reports">
+            <div class="card"><div class="card-body">
+                <p class="text-muted small">定期生成设备在线率、告警统计、数据量等报表。</p>
+                <form id="reportForm" class="row g-2 mb-3">
+                    <div class="col-md-2"><input class="form-control form-control-sm" name="name" placeholder="报表名" required></div>
+                    <div class="col-md-2"><select class="form-select form-select-sm" name="report_type">
+                        <option value="device_online">设备在线</option>
+                        <option value="alarm_summary">告警汇总</option>
+                        <option value="data_summary">数据量统计</option>
+                    </select></div>
+                    <div class="col-md-2"><select class="form-select form-select-sm" name="period">
+                        <option value="daily">每日</option><option value="weekly">每周</option><option value="monthly">每月</option>
+                    </select></div>
+                    <div class="col-md-2"><input class="form-control form-control-sm" name="format" value="xlsx" readonly></div>
+                    <div class="col-md-2"><button class="btn btn-sm btn-primary w-100">创建任务</button></div>
+                </form>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>名称</th><th>类型</th><th>周期</th><th>下次运行</th><th>上次运行</th><th>状态</th><th>操作</th></tr></thead>
+                        <tbody id="reportTbody"><tr><td colspan="7" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div></div>
+        </div>
+    </div>
+</div>
+
+<!-- 设备影子编辑模态框 -->
+<div class="modal fade" id="shadowModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">编辑设备影子</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+        <div class="mb-2"><label class="form-label small">设备名</label><input class="form-control" id="shadowDeviceName" readonly></div>
+        <div class="mb-2"><label class="form-label small">期望状态 (JSON)</label><textarea class="form-control" id="shadowDesired" rows="6"></textarea></div>
+        <div class="mb-2"><label class="form-label small">报告状态 (只读)</label><textarea class="form-control" id="shadowReported" rows="4" readonly></textarea></div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-primary" id="btnSaveShadow">保存</button>
+    </div>
+</div></div>
+
+<script src="/static/js/platform.js"></script>
+{% endblock %}

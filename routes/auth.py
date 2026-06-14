@@ -12,6 +12,7 @@ from flask_limiter.util import get_remote_address
 
 from models.database import db, User
 from services.login_log import LoginLogService
+from services.audit_log import log_action as audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +82,14 @@ def login():
     login_user(user, remember=data.get('remember', False))
     
     # 更新最后登录信息
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = datetime.now()
     user.last_login_ip = LoginLogService.get_client_ip()
     db.session.commit()
     
     # 记录登录日志
     LoginLogService.log_login(user.id, username, success=True)
-    
+    audit_log(action='user.login', resource='user', resource_id=user.id, detail={'username': username}, status='success')
+
     logger.info(f"User '{username}' logged in successfully from {user.last_login_ip}")
     
     return jsonify({
@@ -105,10 +107,11 @@ def logout():
     user_id = current_user.id
     
     logout_user()
-    
+
     # 记录登出日志
     LoginLogService.log_logout(user_id, username)
-    
+    audit_log(action='user.logout', resource='user', resource_id=user_id, detail={'username': username}, status='success')
+
     return jsonify({'success': True, 'message': '已成功登出'})
 
 

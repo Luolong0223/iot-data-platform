@@ -444,3 +444,261 @@ class NotificationConfig(db.Model):
             'enabled': self.enabled,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+
+# ============================================================
+# v5.0 新增模型：设备影子/标签/审计/消息/协议/命令
+# ============================================================
+
+class DeviceShadow(db.Model):
+    """设备影子：设备的虚拟状态（期望状态/报告状态）"""
+    __tablename__ = 'device_shadows'
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    # 期望状态（云端 → 设备）
+    desired_state = db.Column(db.Text, nullable=True)
+    # 报告状态（设备 → 云端）
+    reported_state = db.Column(db.Text, nullable=True)
+    # 元数据：版本号、最后同步时间等
+    version = db.Column(db.BigInteger, default=1, nullable=False)
+    last_sync_at = db.Column(db.DateTime, nullable=True)
+    is_online = db.Column(db.Boolean, default=False, nullable=False)
+    # 元信息（JSON）：包含最新数据点摘要
+    metadata_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now, nullable=False)
+
+    device = db.relationship('Device', backref=db.backref('shadow', uselist=False))
+
+    def to_dict(self):
+        import json
+        return {
+            'id': self.id,
+            'device_id': self.device_id,
+            'desired_state': json.loads(self.desired_state) if self.desired_state else {},
+            'reported_state': json.loads(self.reported_state) if self.reported_state else {},
+            'version': self.version,
+            'last_sync_at': self.last_sync_at.isoformat() if self.last_sync_at else None,
+            'is_online': self.is_online,
+            'metadata': json.loads(self.metadata_json) if self.metadata_json else {},
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class DeviceTag(db.Model):
+    """设备标签"""
+    __tablename__ = 'device_tags'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(64), nullable=False)
+    color = db.Column(db.String(16), default='#1890ff', nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'name', name='uq_device_tag_user_name'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'name': self.name,
+            'color': self.color,
+            'description': self.description,
+            'device_count': db.session.query(DeviceTagMapping).filter_by(tag_id=self.id).count(),
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class DeviceTagMapping(db.Model):
+    """设备-标签多对多关联"""
+    __tablename__ = 'device_tag_mappings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'), nullable=False, index=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey('device_tags.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('device_id', 'tag_id', name='uq_device_tag_mapping'),
+    )
+
+
+class DeviceCommand(db.Model):
+    """下发到设备的命令（云端 → 设备）"""
+    __tablename__ = 'device_commands'
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'), nullable=False, index=True)
+    command = db.Column(db.String(64), nullable=False)
+    payload = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(16), default='pending', nullable=False)  # pending/sent/ack/failed
+    result = db.Column(db.Text, nullable=True)
+    sent_at = db.Column(db.DateTime, nullable=True)
+    ack_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'device_id': self.device_id,
+            'command': self.command,
+            'payload': self.payload,
+            'status': self.status,
+            'result': self.result,
+            'sent_at': self.sent_at.isoformat() if self.sent_at else None,
+            'ack_at': self.ack_at.isoformat() if self.ack_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class ProtocolAdapter(db.Model):
+    """协议适配器（Modbus / MQTT / HTTP / 自定义）"""
+    __tablename__ = 'protocol_adapters'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(64), nullable=False)
+    protocol = db.Column(db.String(32), nullable=False)  # modbus/mqtt/http/custom
+    config = db.Column(db.Text, nullable=True)  # JSON: 协议参数
+    codec = db.Column(db.Text, nullable=True)  # JSON: 编解码脚本路径/规则
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    last_status = db.Column(db.String(16), nullable=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    def to_dict(self):
+        import json
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'name': self.name,
+            'protocol': self.protocol,
+            'config': json.loads(self.config) if self.config else {},
+            'codec': json.loads(self.codec) if self.codec else {},
+            'enabled': self.enabled,
+            'last_run_at': self.last_run_at.isoformat() if self.last_run_at else None,
+            'last_status': self.last_status,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class SystemMessage(db.Model):
+    """系统消息（站内信/通知）"""
+    __tablename__ = 'system_messages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    title = db.Column(db.String(128), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    level = db.Column(db.String(16), default='info', nullable=False)  # info/warn/error/success
+    is_read = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    link = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'title': self.title,
+            'content': self.content,
+            'level': self.level,
+            'is_read': self.is_read,
+            'link': self.link,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class AuditLog(db.Model):
+    """操作审计日志"""
+    __tablename__ = 'audit_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    username = db.Column(db.String(80), nullable=True)
+    action = db.Column(db.String(64), nullable=False, index=True)  # login/logout/create/update/delete/export/import/send_cmd
+    resource = db.Column(db.String(64), nullable=True)  # 资源类型
+    resource_id = db.Column(db.String(64), nullable=True)
+    detail = db.Column(db.Text, nullable=True)
+    ip = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    status = db.Column(db.String(16), default='success', nullable=False)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.username,
+            'action': self.action,
+            'resource': self.resource,
+            'resource_id': self.resource_id,
+            'detail': self.detail,
+            'ip': self.ip,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class NotificationLog(db.Model):
+    """通知发送日志"""
+    __tablename__ = 'notification_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    channel = db.Column(db.String(32), nullable=False)  # email/dingtalk/wechat/webhook
+    target = db.Column(db.String(255), nullable=True)  # 邮箱地址 / webhook URL
+    subject = db.Column(db.String(255), nullable=True)
+    content = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(16), nullable=False)  # success/failed
+    error = db.Column(db.Text, nullable=True)
+    trigger_source = db.Column(db.String(64), nullable=True)  # 告警ID/规则ID等
+    sent_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'channel': self.channel,
+            'target': self.target,
+            'subject': self.subject,
+            'status': self.status,
+            'error': self.error,
+            'trigger_source': self.trigger_source,
+            'sent_at': self.sent_at.isoformat() if self.sent_at else None
+        }
+
+
+class ReportTask(db.Model):
+    """报表任务（每日/每周/每月自动生成）"""
+    __tablename__ = 'report_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    type = db.Column(db.String(32), nullable=False)  # daily/weekly/monthly
+    schedule_time = db.Column(db.String(16), default='08:00', nullable=False)  # HH:MM
+    config = db.Column(db.Text, nullable=True)  # JSON: 报表配置
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    last_status = db.Column(db.String(16), nullable=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    def to_dict(self):
+        import json
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'name': self.name,
+            'type': self.type,
+            'schedule_time': self.schedule_time,
+            'config': json.loads(self.config) if self.config else {},
+            'enabled': self.enabled,
+            'last_run_at': self.last_run_at.isoformat() if self.last_run_at else None,
+            'last_status': self.last_status,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
