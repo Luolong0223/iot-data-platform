@@ -142,7 +142,7 @@
     // API Helper Functions
     // ========================================
     
-    window.apiRequest = async function(url, method = 'GET', data = null) => {
+    window.apiRequest = async function(url, method = 'GET', data = null) {
         const options = {
             method: method.toUpperCase(),
             headers: {
