@@ -33,6 +33,13 @@ logging.basicConfig(level=logging.INFO)
 login_manager = LoginManager()
 csrf = CSRFProtect()
 
+# 可选 gzip 压缩（无损加速）
+try:
+    from flask_compress import Compress
+    Compress()  # 注册全局后 init
+except Exception:
+    pass
+
 # 初始化限流器
 limiter = Limiter(
     key_func=get_remote_address,
@@ -76,6 +83,17 @@ def create_app(config_name=None):
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
+
+    # gzip 压缩
+    try:
+        from services.perf_init import init_perf
+        init_perf(app)
+    except Exception as e:
+        try:
+            from flask_compress import Compress
+            Compress(app)
+        except Exception:
+            pass
     limiter.init_app(app)
     
     # API 路由免除 CSRF（所有 /api/ 前缀）

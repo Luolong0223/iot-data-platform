@@ -12,18 +12,44 @@ devices_bp = Blueprint('devices', __name__, url_prefix='/api/devices')
 @login_required
 def list_devices():
     from services.cache import get_cache, make_key
+    from utils.perf import paginated_response
     cache = get_cache()
-    cache_key = make_key('devices_list', current_user.id)
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return jsonify({'success': True, 'devices': cached, '_cached': True})
-    devices = Device.query.filter_by(user_id=current_user.id).all()
-    result = [d.to_dict() for d in devices]
+    # 分页参数
     try:
-        cache.set(cache_key, result, ttl=20)
-    except Exception:
-        pass
-    return jsonify({'success': True, 'devices': result})
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        size = min(100, max(1, int(request.args.get('size', 20))))
+    except (ValueError, TypeError):
+        size = 20
+    # 仅第一页缓存（避免缓存膨胀）
+    cache_key = make_key('devices_list', current_user.id, page, size) if page == 1 else None
+    if cache_key:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            cached['_cached'] = True
+            return jsonify(cached)
+    base = Device.query.filter_by(user_id=current_user.id)
+    # 轻量字段
+    items, meta = paginated_response_lambda(base, page, size)
+    data = [d.to_dict() for d in items]
+    result = {'success': True, 'devices': data, 'meta': meta}
+    if cache_key:
+        try:
+            cache.set(cache_key, {**result}, ttl=20)
+        except Exception:
+            pass
+    return jsonify(result)
+
+
+def paginated_response_lambda(query, page, size):
+    from sqlalchemy.orm import Query
+    total = query.count()
+    items = query.limit(size).offset((page - 1) * size).all()
+    pages = (total + size - 1) // size if size else 1
+    return items, {'page': page, 'size': size, 'total': total, 'pages': pages,
+                   'has_next': page < pages, 'has_prev': page > 1}
 
 
 @devices_bp.route('', methods=['POST'])
