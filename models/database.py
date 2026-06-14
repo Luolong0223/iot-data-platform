@@ -1080,3 +1080,105 @@ class RuleExecutionLog(db.Model):
             'action_results': _json.loads(self.action_results) if self.action_results else None,
             'executed_at': self.executed_at.isoformat() if self.executed_at else None,
         }
+
+
+# ========================================================================
+# 自定义大屏 (Custom Dashboard)
+# ========================================================================
+
+class DashboardLayout(db.Model):
+    """自定义大屏布局"""
+    __tablename__ = 'dashboard_layouts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 布局配置 (JSON) - 包含所有 widget 的位置和大小
+    layout_config = db.Column(db.Text, nullable=True)
+    
+    # 是否为默认大屏
+    is_default = db.Column(db.Boolean, default=False, nullable=False)
+    
+    # 访问权限: private / shared / public
+    visibility = db.Column(db.String(16), default='private', nullable=False)
+    
+    # 主题配置 (JSON)
+    theme_config = db.Column(db.Text, nullable=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='dashboard_layouts')
+    widgets = db.relationship('DashboardWidget', backref='layout', cascade='all, delete-orphan', lazy='dynamic')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'layout_config': _json.loads(self.layout_config) if self.layout_config else [],
+            'is_default': self.is_default,
+            'visibility': self.visibility,
+            'theme_config': _json.loads(self.theme_config) if self.theme_config else {},
+            'widgets': [w.to_dict() for w in self.widgets],
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class DashboardWidget(db.Model):
+    """大屏组件"""
+    __tablename__ = 'dashboard_widgets'
+
+    id = db.Column(db.Integer, primary_key=True)
+    layout_id = db.Column(db.Integer, db.ForeignKey('dashboard_layouts.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 组件类型: chart / gauge / stat / map / table / text / image
+    widget_type = db.Column(db.String(32), nullable=False)
+    
+    # 组件标题
+    title = db.Column(db.String(128), nullable=True)
+    
+    # 位置和大小 (grid 系统)
+    x = db.Column(db.Integer, default=0, nullable=False)
+    y = db.Column(db.Integer, default=0, nullable=False)
+    w = db.Column(db.Integer, default=4, nullable=False)  # 宽度 (grid units)
+    h = db.Column(db.Integer, default=3, nullable=False)  # 高度 (grid units)
+    
+    # 数据源配置 (JSON)
+    # 示例: {"device_id": 1, "metric": "temperature", "chart_type": "line"}
+    data_config = db.Column(db.Text, nullable=True)
+    
+    # 样式配置 (JSON)
+    style_config = db.Column(db.Text, nullable=True)
+    
+    # 刷新间隔 (秒)
+    refresh_interval = db.Column(db.Integer, default=30, nullable=False)
+    
+    # 排序
+    order = db.Column(db.Integer, default=0, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'layout_id': self.layout_id,
+            'widget_type': self.widget_type,
+            'title': self.title,
+            'x': self.x,
+            'y': self.y,
+            'w': self.w,
+            'h': self.h,
+            'data_config': _json.loads(self.data_config) if self.data_config else {},
+            'style_config': _json.loads(self.style_config) if self.style_config else {},
+            'refresh_interval': self.refresh_interval,
+            'order': self.order,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }

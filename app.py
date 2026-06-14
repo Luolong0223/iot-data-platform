@@ -146,6 +146,8 @@ def create_app(config_name=None):
     app.register_blueprint(shadow_bp)
     from routes.rule_engine import rule_engine_bp
     app.register_blueprint(rule_engine_bp)
+    from routes.custom_dashboard import custom_dashboard_bp
+    app.register_blueprint(custom_dashboard_bp)
 
     app.register_blueprint(docs_bp)
 
@@ -157,6 +159,7 @@ def create_app(config_name=None):
     csrf.exempt(ota_bp)
     csrf.exempt(shadow_bp)
     csrf.exempt(rule_engine_bp)
+    csrf.exempt(custom_dashboard_bp)
     csrf.exempt(docs_bp)
 
     with app.app_context():
