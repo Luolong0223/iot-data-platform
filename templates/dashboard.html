@@ -1,374 +1,104 @@
-{% extends "base.html" %}
-
-{% block title %}数据看板 - IoT数据平台{% endblock %}
-
-{% block head %}
-<style>
-.stat-card {
-    transition: all 0.3s ease;
-    border: none;
-    border-radius: 12px;
-    overflow: hidden;
-}
-.stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-}
-.stat-card .card-body {
-    background: linear-gradient(135deg, var(--card-bg) 0%, var(--card-bg-end, #f8f9fa) 100%);
-}
-.stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    color: white;
-}
-.stat-value {
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1;
-}
-.stat-label {
-    font-size: 13px;
-    color: #6c757d;
-    margin-top: 4px;
-}
-.stat-trend {
-    font-size: 12px;
-    margin-top: 8px;
-}
-.stat-trend.up { color: #198754; }
-.stat-trend.down { color: #dc3545; }
-
-.realtime-card {
-    border: 2px solid #198754;
-}
-.realtime-card .card-header {
-    background: linear-gradient(135deg, #198754 0%, #20c997 100%);
-    color: white;
-}
-
-.chart-container {
-    position: relative;
-    height: 250px;
-}
-
-.device-status-item {
-    display: flex;
-    align-items: center;
-    padding: 10px 15px;
-    border-bottom: 1px solid #eee;
-}
-.device-status-item:last-child {
-    border-bottom: none;
-}
-.device-status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    margin-right: 10px;
-}
-.device-status-dot.online { background: #198754; }
-.device-status-dot.offline { background: #dc3545; }
-.device-status-dot.partial { background: #ffc107; }
-
-.alarm-item {
-    display: flex;
-    align-items: flex-start;
-    padding: 12px 15px;
-    border-left: 3px solid;
-    background: #f8f9fa;
-    margin-bottom: 8px;
-    border-radius: 0 8px 8px 0;
-}
-.alarm-item.critical { border-left-color: #dc3545; background: #fff5f5; }
-.alarm-item.warning { border-left-color: #ffc107; background: #fffdf0; }
-.alarm-item.info { border-left-color: #0dcaf0; background: #f0fcff; }
-
-.data-stream-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid #eee;
-    font-size: 13px;
-    animation: slideIn 0.3s ease;
-}
-@keyframes slideIn {
-    from { opacity: 0; transform: translateX(-20px); }
-    to { opacity: 1; transform: translateX(0); }
-}
-
-/* 暗黑模式适配 */
-@media (prefers-color-scheme: dark) {
-    .stat-card .card-body {
-        --card-bg: #1e1e1e;
-        --card-bg-end: #2d2d2d;
-    }
-    .alarm-item { background: #2d2d2d; }
-    .alarm-item.critical { background: #3d1f1f; }
-    .alarm-item.warning { background: #3d3d1f; }
-    .alarm-item.info { background: #1f3d3d; }
-}
-</style>
-{% endblock %}
+{% extends "base_v2.html" %}
+{% block title %}仪表盘 - IoT数据平台{% endblock %}
 
 {% block content %}
-<div class="fade-in">
-    <!-- 页面标题 -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h4 class="mb-1"><i class="bi bi-speedometer2 text-primary"></i> 数据看板</h4>
-            <small class="text-muted">实时监控您的IoT设备数据</small>
-        </div>
-        <div class="d-flex align-items-center gap-3">
-            <span class="badge bg-success" id="sseStatus">
-                <i class="bi bi-broadcast"></i> 实时连接中
-            </span>
-            <span class="badge bg-secondary" id="lastUpdateTime">
-                <i class="bi bi-clock"></i> --
-            </span>
-        </div>
-    </div>
-
-    <!-- 第一行：统计卡片 -->
+<div class="container-fluid py-4">
+    <!-- 顶部汇总卡片 -->
     <div class="row g-3 mb-4">
-        <div class="col-6 col-lg-3">
-            <div class="card stat-card">
+        <div class="col-md-3">
+            <div class="card stat-card stat-card-primary">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="stat-value text-primary" id="statDevices">0</div>
-                            <div class="stat-label">设备总数</div>
-                            <div class="stat-trend up" id="statDevicesTrend">
-                                <i class="bi bi-arrow-up"></i> --
-                            </div>
-                        </div>
-                        <div class="stat-icon bg-primary bg-opacity-10 text-primary">
-                            <i class="bi bi-hdd-rack"></i>
-                        </div>
-                    </div>
+                    <div class="stat-label">设备总数</div>
+                    <div class="stat-value" id="totalDevices">--</div>
+                    <div class="stat-extra">在线 <span id="onlineDevices">--</span> · 离线 <span id="offlineDevices">--</span></div>
                 </div>
             </div>
         </div>
-        <div class="col-6 col-lg-3">
-            <div class="card stat-card">
+        <div class="col-md-3">
+            <div class="card stat-card stat-card-success">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="stat-value text-success" id="statOnlineRate">0%</div>
-                            <div class="stat-label">在线率</div>
-                            <div class="stat-trend" id="statOnlineTrend">
-                                <span id="statOnline">0</span> / <span id="statTotal">0</span> 在线
-                            </div>
-                        </div>
-                        <div class="stat-icon bg-success bg-opacity-10 text-success">
-                            <i class="bi bi-wifi"></i>
-                        </div>
-                    </div>
+                    <div class="stat-label">已选数据点</div>
+                    <div class="stat-value" id="totalWidgets">--</div>
+                    <div class="stat-extra">展示在仪表盘</div>
                 </div>
             </div>
         </div>
-        <div class="col-6 col-lg-3">
-            <div class="card stat-card">
+        <div class="col-md-3">
+            <div class="card stat-card stat-card-info">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="stat-value text-info" id="statTodayData">0</div>
-                            <div class="stat-label">今日数据</div>
-                            <div class="stat-trend up" id="statDataTrend">
-                                <i class="bi bi-graph-up-arrow"></i> --
-                            </div>
-                        </div>
-                        <div class="stat-icon bg-info bg-opacity-10 text-info">
-                            <i class="bi bi-database"></i>
-                        </div>
-                    </div>
+                    <div class="stat-label">最近更新</div>
+                    <div class="stat-value" id="latestUpdate">--</div>
+                    <div class="stat-extra">最后一条数据</div>
                 </div>
             </div>
         </div>
-        <div class="col-6 col-lg-3">
-            <div class="card stat-card">
+        <div class="col-md-3">
+            <div class="card stat-card stat-card-warning">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="stat-value text-danger" id="statTodayAlarms">0</div>
-                            <div class="stat-label">今日报警</div>
-                            <div class="stat-trend down" id="statAlarmTrend">
-                                <i class="bi bi-shield-check"></i> --
-                            </div>
-                        </div>
-                        <div class="stat-icon bg-danger bg-opacity-10 text-danger">
-                            <i class="bi bi-bell"></i>
+                    <div class="stat-label">实时刷新</div>
+                    <div class="stat-value">
+                        <div class="form-check form-switch d-inline-block">
+                            <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
                         </div>
                     </div>
+                    <div class="stat-extra">每 <span id="refreshInterval">3</span> 秒</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 第二行：趋势图 + 实时数据流 -->
-    <div class="row g-4 mb-4">
-        <div class="col-lg-8">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center bg-transparent">
-                    <span><i class="bi bi-graph-up text-primary"></i> 数据趋势</span>
-                    <div class="d-flex gap-2">
-                        <select class="form-select form-select-sm" id="chartDevice" style="width: 150px;">
-                            <option value="all">所有设备</option>
-                        </select>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary active" data-period="24h">24小时</button>
-                            <button class="btn btn-outline-primary" data-period="7d">7天</button>
-                            <button class="btn btn-outline-primary" data-period="30d">30天</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="trendChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="card h-100 realtime-card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-lightning-charge-fill"></i> 实时数据流</span>
-                    <div class="d-flex gap-2 align-items-center">
-                        <span class="badge bg-white text-success" id="streamCount">0 条/分钟</span>
-                        <button class="btn btn-sm btn-light" id="toggleStream" title="暂停/继续">
-                            <i class="bi bi-pause-fill"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
-                    <div id="realtimeDataList">
-                        <div class="text-center text-muted py-4">
-                            <div class="spinner-border spinner-border-sm" role="status"></div>
-                            <span class="ms-2">等待数据...</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 第三行：报警列表 + 设备状态 + 数据分布 -->
-    <div class="row g-4">
-        <div class="col-lg-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center bg-transparent">
-                    <span><i class="bi bi-bell text-danger"></i> 最近报警</span>
-                    <a href="/alarms" class="btn btn-sm btn-outline-danger">查看全部</a>
-                </div>
-                <div class="card-body p-2" style="max-height: 280px; overflow-y: auto;">
-                    <div id="recentAlarmList">
-                        <div class="text-center text-muted py-4">暂无报警</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center bg-transparent">
-                    <span><i class="bi bi-hdd-rack text-primary"></i> 设备状态</span>
-                    <a href="/devices" class="btn btn-sm btn-outline-primary">查看全部</a>
-                </div>
-                <div class="card-body p-0" style="max-height: 280px; overflow-y: auto;">
-                    <div id="deviceStatusList">
-                        <div class="text-center text-muted py-4">暂无设备</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center bg-transparent">
-                    <span><i class="bi bi-pie-chart text-info"></i> 数据分布</span>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container" style="height: 200px;">
-                        <canvas id="distributionChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 快捷操作 -->
-    <div class="card mt-4">
+    <!-- 工具栏 -->
+    <div class="card mb-3">
         <div class="card-body py-2">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <div class="d-flex gap-2">
-                    <a href="/screen" class="btn btn-primary btn-sm" target="_blank">
-                        <i class="bi bi-fullscreen"></i> 数据大屏
-                    </a>
-                    <a href="/map" class="btn btn-outline-primary btn-sm">
-                        <i class="bi bi-geo-alt"></i> 设备地图
-                    </a>
-                    <a href="/data" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-table"></i> 历史数据
-                    </a>
-                    <a href="/export" class="btn btn-outline-success btn-sm">
-                        <i class="bi bi-download"></i> 数据导出
-                    </a>
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <button class="btn btn-primary btn-sm" id="addWidgetBtn">
+                        <i class="bi bi-plus-lg"></i> 添加数据点
+                    </button>
+                    <button class="btn btn-outline-light btn-sm" id="refreshNowBtn">
+                        <i class="bi bi-arrow-clockwise"></i> 立即刷新
+                    </button>
                 </div>
-                <div class="d-flex gap-2 align-items-center">
-                    <span class="text-muted small">刷新间隔:</span>
-                    <select class="form-select form-select-sm" id="refreshInterval" style="width: 100px;">
-                        <option value="5">5秒</option>
-                        <option value="10" selected>10秒</option>
-                        <option value="30">30秒</option>
-                        <option value="60">1分钟</option>
-                    </select>
+                <div>
+                    <span class="text-muted small">仪表盘布局可拖拽重排</span>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据点卡片 -->
+    <div class="row g-3" id="widgetsContainer">
+        <div class="col-12 text-center text-muted py-5" id="emptyState">
+            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+            <p class="mt-3">还没有添加数据点,点击 "添加数据点" 按钮开始</p>
+        </div>
+    </div>
+</div>
+
+<!-- 添加数据点 Modal -->
+<div class="modal fade" id="addWidgetModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-light">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> 选择要显示的数据点</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control bg-secondary text-light border-0" id="searchDataPoint" placeholder="搜索设备/通道/数据点...">
+                </div>
+                <div id="deviceListContainer">
+                    <div class="text-center text-muted py-4">加载中...</div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-<script>
-// 页面初始化
-document.addEventListener('DOMContentLoaded', function() {
-    // 初始化图表
-    initCharts();
-    
-    // 加载统计数据
-    loadDashboardStats();
-    
-    // 加载设备列表（用于图表筛选）
-    loadDeviceOptions();
-    
-    // 启动实时数据流
-    startSSEStream();
-    
-    // 设置定时刷新
-    setInterval(loadDashboardStats, 10000);
-    
-    // 绑定事件
-    document.getElementById('toggleStream').addEventListener('click', toggleRealtimeStream);
-    document.querySelectorAll('[data-period]').forEach(btn => {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('[data-period]').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            updateTrendChart(this.dataset.period);
-        });
-    });
-    document.getElementById('chartDevice').addEventListener('change', function() {
-        updateTrendChart();
-    });
-    document.getElementById('refreshInterval').addEventListener('change', function() {
-        // 更新刷新间隔
-    });
-});
-</script>
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/v2/dashboard.js') }}"></script>
 {% endblock %}

@@ -1,158 +1,114 @@
-{% extends "base.html" %}
-
-{% block title %}数据查看 - IoT Data Platform{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
-{% endblock %}
+{% extends "base_v2.html" %}
+{% block title %}数据查看 - IoT数据平台{% endblock %}
 
 {% block content %}
-<div class="fade-in">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><i class="bi bi-table"></i> 数据查看</h4>
-        <div class="d-flex gap-2">
-            <button class="btn btn-outline-primary" onclick="exportData('csv')">
-                <i class="bi bi-download"></i> 导出 CSV
-            </button>
-            <button class="btn btn-outline-success" onclick="exportData('json')">
-                <i class="bi bi-download"></i> 导出 JSON
-            </button>
-        </div>
-    </div>
-
-    <div class="card mb-4">
+<div class="container-fluid py-4">
+    <!-- 筛选条件 -->
+    <div class="card mb-3">
         <div class="card-body">
-            <div class="row g-3">
+            <div class="row g-3 align-items-end">
                 <div class="col-md-3">
-                    <label class="form-label">设备</label>
-                    <select class="form-select" id="filterDevice">
+                    <label class="form-label small text-muted">设备</label>
+                    <select class="form-select bg-secondary text-light border-0" id="filterDevice">
                         <option value="">全部设备</option>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">通道</label>
-                    <select class="form-select" id="filterChannel">
+                    <label class="form-label small text-muted">通道</label>
+                    <select class="form-select bg-secondary text-light border-0" id="filterChannel">
                         <option value="">全部通道</option>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">数据点</label>
-                    <input type="text" class="form-control" id="filterPoint" placeholder="如 Data-1, P1">
+                    <label class="form-label small text-muted">数据点</label>
+                    <select class="form-select bg-secondary text-light border-0" id="filterDataPoint">
+                        <option value="">全部数据点</option>
+                    </select>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <button class="btn btn-primary w-100" onclick="applyFilters()">
-                        <i class="bi bi-funnel"></i> 筛选
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">时间范围</label>
+                    <select class="form-select bg-secondary text-light border-0" id="filterTimeRange">
+                        <option value="1">最近 1 小时</option>
+                        <option value="6">最近 6 小时</option>
+                        <option value="24" selected>最近 24 小时</option>
+                        <option value="168">最近 7 天</option>
+                        <option value="720">最近 30 天</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="col-12" id="customTimeRange" style="display:none;">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <input type="datetime-local" class="form-control bg-secondary text-light border-0" id="filterStartTime">
+                        </div>
+                        <div class="col-md-3">
+                            <input type="datetime-local" class="form-control bg-secondary text-light border-0" id="filterEndTime">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <button class="btn btn-primary btn-sm" id="applyFilterBtn">
+                        <i class="bi bi-funnel"></i> 应用筛选
+                    </button>
+                    <button class="btn btn-outline-light btn-sm" id="resetFilterBtn">
+                        <i class="bi bi-x-circle"></i> 重置
+                    </button>
+                    <button class="btn btn-success btn-sm" id="exportDataBtn">
+                        <i class="bi bi-download"></i> 导出 CSV
                     </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card">
+    <!-- 图表 -->
+    <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-graph-up"></i> 趋势图</div>
         <div class="card-body">
+            <div id="chartContainer" style="height: 350px;">
+                <div class="text-center text-muted py-5">请选择设备、通道和数据点后查看趋势</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据列表 -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-table"></i> 数据列表 <span class="badge bg-secondary" id="dataTotal">0</span></span>
+            <button class="btn btn-sm btn-outline-danger" id="cleanupBtn" title="清理旧数据">
+                <i class="bi bi-trash"></i> 清理
+            </button>
+        </div>
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-striped table-hover" id="dataTable" style="width:100%">
+                <table class="table table-dark table-hover mb-0">
                     <thead>
                         <tr>
-                            <th>ID</th>
                             <th>时间</th>
                             <th>设备</th>
                             <th>通道</th>
                             <th>数据点</th>
-                            <th>数值</th>
-                            <th>操作</th>
+                            <th>值</th>
+                            <th>单位</th>
+                            <th width="100">操作</th>
                         </tr>
                     </thead>
-                    <tbody></tbody>
+                    <tbody id="dataListTbody">
+                        <tr><td colspan="7" class="text-center text-muted py-4">加载中...</td></tr>
+                    </tbody>
                 </table>
             </div>
+        </div>
+        <div class="card-footer">
+            <nav>
+                <ul class="pagination pagination-sm justify-content-center mb-0" id="pagination"></ul>
+            </nav>
         </div>
     </div>
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
-<script>
-(function() {
-    let dataTable = null;
-
-    function loadFilters() {
-        apiRequest('/api/devices').then(function(data) {
-            const deviceSelect = document.getElementById('filterDevice');
-            const devices = data.devices || [];
-            deviceSelect.innerHTML = '<option value="">全部设备</option>' +
-                devices.map(function(d) {
-                    return '<option value="' + d.id + '">' + d.name + '</option>';
-                }).join('');
-
-            deviceSelect.addEventListener('change', function() {
-                const devId = parseInt(this.value);
-                const channelSelect = document.getElementById('filterChannel');
-                if (!devId) {
-                    channelSelect.innerHTML = '<option value="">全部通道</option>';
-                    return;
-                }
-                const dev = devices.find(function(x) { return x.id === devId; });
-                const channels = dev && dev.channels ? dev.channels : [];
-                channelSelect.innerHTML = '<option value="">全部通道</option>' +
-                    channels.map(function(c) {
-                        return '<option value="' + c.id + '">' + c.name + '</option>';
-                    }).join('');
-            });
-        }).catch(function() {});
-    }
-
-    window.applyFilters = function() {
-        if (dataTable) dataTable.ajax.reload();
-    };
-
-    window.exportData = function(format) {
-        const device = document.getElementById('filterDevice').value;
-        const channel = document.getElementById('filterChannel').value;
-        const point = document.getElementById('filterPoint').value;
-        const params = new URLSearchParams();
-        if (device) params.append('device_id', device);
-        if (channel) params.append('channel_id', channel);
-        if (point) params.append('point_name', point);
-        params.append('format', format);
-        params.append('export', '1');
-        window.open('/api/data/history?' + params.toString(), '_blank');
-    };
-
-    document.addEventListener('DOMContentLoaded', function() {
-        loadFilters();
-        dataTable = $('#dataTable').DataTable({
-            processing: true,
-            serverSide: false,
-            ajax: {
-                url: '/api/data/history',
-                data: function(d) {
-                    d.device_id = document.getElementById('filterDevice').value;
-                    d.channel_id = document.getElementById('filterChannel').value;
-                    d.point_name = document.getElementById('filterPoint').value;
-                },
-                dataSrc: 'data'
-            },
-            columns: [
-                { data: 'id' },
-                { data: 'timestamp', render: function(data) { return formatDateTime(data); } },
-                { data: 'device_name' },
-                { data: 'channel_name' },
-                { data: 'name' },
-                { data: 'value', render: function(data) { return formatNumber(data, 4); } },
-                { data: null, orderable: false, render: function(data) {
-                    return '<a href="/data/chart/' + data.channel_id + '/' + encodeURIComponent(data.name) + '" class="btn btn-sm btn-outline-primary" title="图表"><i class="bi bi-graph-up"></i></a>';
-                }}
-            ],
-            language: {
-                url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/zh.json'
-            },
-            order: [[1, 'desc']],
-            pageLength: 25
-        });
-    });
-})();
-</script>
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="{{ url_for('static', filename='js/v2/data_view.js') }}"></script>
 {% endblock %}

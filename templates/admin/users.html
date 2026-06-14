@@ -1,94 +1,25 @@
-{% extends "admin/base_admin.html" %}
-
-{% block title %}用户管理{% endblock %}
-
-{% block extra_css %}
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
-{% endblock %}
-
+{% extends "base_v2.html" %}
+{% block title %}用户管理 - IoT数据平台{% endblock %}
 {% block content %}
-<div class="fade-in">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h4 class="mb-0"><i class="bi bi-people"></i> 用户管理</h4>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal" onclick="resetUserForm()">
-            <i class="bi bi-plus-lg"></i> 添加用户
-        </button>
-    </div>
-
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle" id="usersTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>用户名</th>
-                            <th>管理员</th>
-                            <th>TCP端口</th>
-                            <th>存储</th>
-                            <th>创建时间</th>
-                            <th class="text-end">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <tr><td colspan="7" class="text-center text-muted py-4">加载中...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- User Modal -->
-<div class="modal fade" id="userModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="userModalTitle">添加用户</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="userForm">
-                    <input type="hidden" id="userId">
-                    <div class="mb-3">
-                        <label for="userName" class="form-label">用户名 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="userName" required placeholder="用户名">
-                    </div>
-                    <div class="mb-3">
-                        <label for="userPassword" class="form-label">密码 <span class="text-danger" id="pwRequired">*</span></label>
-                        <input type="password" class="form-control" id="userPassword" placeholder="密码">
-                        <div class="form-text" id="pwHint">添加用户时必须设置密码</div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="userTcpPort" class="form-label">TCP 端口</label>
-                        <input type="number" class="form-control" id="userTcpPort" placeholder="自动分配">
-                    </div>
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" id="userIsAdmin">
-                        <label class="form-check-label" for="userIsAdmin">管理员权限</label>
-                    </div>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="userStorage" checked>
-                        <label class="form-check-label" for="userStorage">启用数据存储</label>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" onclick="saveUser()">保存</button>
-            </div>
-        </div>
-    </div>
+<div class="container-fluid py-4">
+    <h3><i class="bi bi-people"></i> 用户管理</h3>
+    <p class="text-muted">通过 API 管理用户: <code>/api/admin/users</code></p>
+    <div id="userList">加载中...</div>
 </div>
 {% endblock %}
-
-{% block extra_js %}
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
-<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    loadUsersTable();
-});
+(async () => {
+    const r = await apiRequest('/api/admin/users');
+    const el = document.getElementById('userList');
+    if (!r.success) { el.innerHTML = '<div class="alert alert-danger">加载失败</div>'; return; }
+    el.innerHTML = `<table class="table table-dark table-hover">
+        <thead><tr><th>ID</th><th>用户名</th><th>邮箱</th><th>管理员</th><th>状态</th><th>创建时间</th></tr></thead>
+        <tbody>${(r.data||[]).map(u => `<tr>
+            <td>${u.id}</td><td>${u.username}</td><td>${u.email||''}</td>
+            <td>${u.is_admin?'是':'否'}</td><td>${u.is_active?'启用':'禁用'}</td>
+            <td>${u.created_at||''}</td>
+        </tr>`).join('')}</tbody></table>`;
+})();
 </script>
 {% endblock %}

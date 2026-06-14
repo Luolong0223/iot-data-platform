@@ -11,8 +11,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 from models.database import db, User
-from services.login_log import LoginLogService
-from services.audit_log import log_action as audit_log
+from services.utils import LoginLogService, log_action as audit_log
 
 logger = logging.getLogger(__name__)
 
