@@ -2,28 +2,19 @@
 API 网关路由
 API Gateway Routes
 """
-from flask import Blueprint, request, jsonify, session
-from functools import wraps
+from flask import Blueprint, request, jsonify
+from flask_login import login_required, current_user
 from datetime import datetime
 from services.api_gateway_service import APIKeyService, APIUsageService
 
 api_gateway_bp = Blueprint('api_gateway', __name__, url_prefix='/api/gateway')
 
 
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': '请先登录'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-
 @api_gateway_bp.route('/keys', methods=['GET'])
 @login_required
 def list_api_keys():
     """获取 API Key 列表"""
-    user_id = session['user_id']
+    user_id = current_user.id
     enabled = request.args.get('enabled')
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -46,7 +37,7 @@ def list_api_keys():
 @login_required
 def create_api_key():
     """创建 API Key"""
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     
     if not data or 'name' not in data:
@@ -73,7 +64,7 @@ def create_api_key():
 @login_required
 def get_api_key(key_id):
     """获取 API Key 详情"""
-    user_id = session['user_id']
+    user_id = current_user.id
     
     api_key = APIKeyService.get_api_key(key_id, user_id)
     if not api_key:
@@ -86,7 +77,7 @@ def get_api_key(key_id):
 @login_required
 def update_api_key(key_id):
     """更新 API Key"""
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     
     if not data:
@@ -115,7 +106,7 @@ def update_api_key(key_id):
 @login_required
 def delete_api_key(key_id):
     """删除 API Key"""
-    user_id = session['user_id']
+    user_id = current_user.id
     
     try:
         APIKeyService.delete_api_key(key_id, user_id)
@@ -130,7 +121,7 @@ def delete_api_key(key_id):
 @login_required
 def toggle_api_key(key_id):
     """启用/禁用 API Key"""
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     
     if not data or 'enabled' not in data:
@@ -153,7 +144,7 @@ def toggle_api_key(key_id):
 @login_required
 def get_usage_logs(key_id):
     """获取 API Key 使用日志"""
-    user_id = session['user_id']
+    user_id = current_user.id
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
     
@@ -181,7 +172,7 @@ def get_usage_logs(key_id):
 @login_required
 def get_usage_statistics(key_id):
     """获取 API Key 使用统计"""
-    user_id = session['user_id']
+    user_id = current_user.id
     days = request.args.get('days', 7, type=int)
     
     try:
@@ -199,7 +190,7 @@ def get_usage_statistics(key_id):
 @login_required
 def get_all_statistics():
     """获取所有 API Key 的统计"""
-    user_id = session['user_id']
+    user_id = current_user.id
     days = request.args.get('days', 7, type=int)
     
     try:

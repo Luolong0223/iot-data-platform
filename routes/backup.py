@@ -2,27 +2,18 @@
 数据备份路由
 Data Backup Routes
 """
-from flask import Blueprint, request, jsonify, session
-from functools import wraps
+from flask import Blueprint, request, jsonify
+from flask_login import login_required, current_user
 from services.backup_service import BackupService, BackupScheduleService
 
 backup_bp = Blueprint('backup', __name__, url_prefix='/api/backup')
-
-
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': '请先登录'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 @backup_bp.route('/backups', methods=['GET'])
 @login_required
 def list_backups():
     """获取备份列表"""
-    user_id = session['user_id']
+    user_id = current_user.id
     backup_type = request.args.get('type')
     status = request.args.get('status')
     page = request.args.get('page', 1, type=int)
@@ -43,7 +34,7 @@ def list_backups():
 @login_required
 def create_backup():
     """创建备份"""
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     
     if not data or 'name' not in data:
@@ -66,7 +57,7 @@ def create_backup():
 @login_required
 def get_backup(backup_id):
     """获取备份详情"""
-    user_id = session['user_id']
+    user_id = current_user.id
     
     backup = BackupService.get_backup(backup_id, user_id)
     if not backup:
@@ -79,7 +70,7 @@ def get_backup(backup_id):
 @login_required
 def delete_backup(backup_id):
     """删除备份"""
-    user_id = session['user_id']
+    user_id = current_user.id
     
     try:
         BackupService.delete_backup(backup_id, user_id)
@@ -94,7 +85,7 @@ def delete_backup(backup_id):
 @login_required
 def restore_backup(backup_id):
     """恢复备份"""
-    user_id = session['user_id']
+    user_id = current_user.id
     
     try:
         result = BackupService.restore_backup(backup_id, user_id)
@@ -109,7 +100,7 @@ def restore_backup(backup_id):
 @login_required
 def get_statistics():
     """获取备份统计"""
-    user_id = session['user_id']
+    user_id = current_user.id
     
     try:
         result = BackupService.get_backup_statistics(user_id)
@@ -122,7 +113,7 @@ def get_statistics():
 @login_required
 def cleanup_backups():
     """清理过期备份"""
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json() or {}
     retention_days = data.get('retention_days', 30)
     
@@ -142,7 +133,7 @@ def cleanup_backups():
 @login_required
 def list_schedules():
     """获取备份定时任务列表"""
-    user_id = session['user_id']
+    user_id = current_user.id
     
     schedules = BackupScheduleService.list_schedules(user_id)
     return jsonify({
@@ -155,7 +146,7 @@ def list_schedules():
 @login_required
 def create_schedule():
     """创建备份定时任务"""
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     
     if not data or 'name' not in data:
@@ -181,7 +172,7 @@ def create_schedule():
 @login_required
 def update_schedule(schedule_id):
     """更新备份定时任务"""
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     
     if not data:
@@ -204,7 +195,7 @@ def update_schedule(schedule_id):
 @login_required
 def delete_schedule(schedule_id):
     """删除备份定时任务"""
-    user_id = session['user_id']
+    user_id = current_user.id
     
     try:
         BackupScheduleService.delete_schedule(schedule_id, user_id)
@@ -219,7 +210,7 @@ def delete_schedule(schedule_id):
 @login_required
 def toggle_schedule(schedule_id):
     """启用/禁用备份定时任务"""
-    user_id = session['user_id']
+    user_id = current_user.id
     data = request.get_json()
     
     if not data or 'enabled' not in data:
