@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 文档 (ReDoc) - IoT 数据平台</title>
+    <link rel="stylesheet" href="/static/css/design-system.css">
+    <style>
+        body { margin: 0; }
+        redoc { display: block; }
+    </style>
+</head>
+<body>
+    <redoc spec-url="/api/docs/spec"></redoc>
+    <script src="https://cdn.jsdelivr.net/npm/redoc@2.1.3/bundles/redoc.standalone.js"></script>
+    <script>
+        // ReDoc 主题色定制
+        document.addEventListener('DOMContentLoaded', function() {
+            const observer = new MutationObserver(() => {
+                const style = document.createElement('style');
+                style.textContent = `
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important; }
+                    .api-content h1, .api-content h2, .api-content h3 { color: #303133 !important; }
+                `;
+                document.head.appendChild(style);
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    </script>
+</body>
+</html>

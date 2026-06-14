@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 文档 - IoT 数据平台</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.5/swagger-ui.css">
+    <link rel="stylesheet" href="/static/css/design-system.css">
+    <style>
+        body { margin: 0; background: var(--bg-base, #f5f7fa); }
+        .topbar {
+            position: sticky; top: 0; z-index: 100;
+            background: var(--bg-elevated, #ffffff);
+            border-bottom: 1px solid var(--border-base, #e4e7ed);
+            padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+            box-shadow: var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.06));
+        }
+        .topbar h1 { margin: 0; font-size: 18px; color: var(--text-primary, #303133); }
+        .topbar-actions { display: flex; gap: 8px; }
+        .topbar-actions a, .topbar-actions button {
+            padding: 6px 14px; border: 1px solid var(--border-base, #dcdfe6);
+            background: var(--bg-base, #ffffff); color: var(--text-primary, #303133);
+            border-radius: 6px; cursor: pointer; font-size: 13px; text-decoration: none;
+            transition: all 0.2s;
+        }
+        .topbar-actions a:hover, .topbar-actions button:hover {
+            border-color: var(--color-primary, #409eff); color: var(--color-primary, #409eff);
+        }
+        .swagger-container { padding: 0; }
+        /* Swagger UI 主题覆盖 */
+        .swagger-ui .info { margin: 20px 0; }
+        .swagger-ui .info .title { color: var(--text-primary, #303133); }
+        .swagger-ui .scheme-container { background: var(--bg-elevated, #ffffff); }
+        .swagger-ui .opblock-tag { border-color: var(--border-light, #ebeef5); }
+        .swagger-ui .opblock { border-color: var(--border-light, #ebeef5); box-shadow: var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.06)); }
+        .swagger-ui .opblock .opblock-summary { border-color: var(--border-light, #ebeef5); }
+        .swagger-ui .opblock.opblock-post { border-color: #67c23a; background: rgba(103,194,58,0.05); }
+        .swagger-ui .opblock.opblock-get { border-color: #909399; background: rgba(144,147,153,0.05); }
+        .swagger-ui .opblock.opblock-put { border-color: #e6a23c; background: rgba(230,162,60,0.05); }
+        .swagger-ui .opblock.opblock-delete { border-color: #f56c6c; background: rgba(245,108,108,0.05); }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <h1>📡 IoT 数据平台 API 文档</h1>
+        <div class="topbar-actions">
+            <a href="/api/docs/redoc">📖 ReDoc 视图</a>
+            <a href="/api/docs/spec" target="_blank">📄 OpenAPI JSON</a>
+            <a href="/api/docs/postman" target="_blank">📦 Postman Collection</a>
+            <a href="/api/docs/endpoints" target="_blank">🔍 端点列表</a>
+            <a href="/dashboard">🏠 返回首页</a>
+        </div>
+    </div>
+    <div id="swagger-ui" class="swagger-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.5/swagger-ui-bundle.js"></script>
+    <script>
+        window.onload = () => {
+            SwaggerUIBundle({
+                url: "/api/docs/spec",
+                dom_id: "#swagger-ui",
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis
+                ],
+                layout: "BaseLayout",
+                docExpansion: "list",
+                defaultModelsExpandDepth: 2,
+                defaultModelExpandDepth: 2,
+                persistAuthorization: true,
+                displayRequestDuration: true,
+                filter: true,
+                tryItOutEnabled: true
+            });
+        };
+    </script>
+</body>
+</html>

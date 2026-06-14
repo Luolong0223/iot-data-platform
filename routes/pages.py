@@ -138,3 +138,15 @@ def admin_system():
         flash('需要管理员权限', 'error')
         return redirect(url_for('pages.dashboard'))
     return render_template('admin/system.html')
+
+
+@pages_bp.route('/docs')
+def swagger_ui():
+    """Swagger UI API 文档"""
+    return render_template('swagger.html')
+
+
+@pages_bp.route('/redoc')
+def redoc_ui():
+    """ReDoc API 文档"""
+    return render_template('redoc.html')
