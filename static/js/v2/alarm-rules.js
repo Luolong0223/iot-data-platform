@@ -29,7 +29,7 @@ class AlarmRulesManager {
 
     async loadRules() {
         try {
-            const res = await apiRequest('/api/alarm-rules');
+            const res = await apiRequest('/api/alarms/rules');
             if (res && res.success && Array.isArray(res.rules)) {
                 this.rules = res.rules;
                 this.renderRules(this.rules);
@@ -184,7 +184,7 @@ class AlarmRulesManager {
         }
         
         try {
-            const url = id ? `/api/alarm-rules/${id}` : '/api/alarm-rules';
+            const url = id ? `/api/alarms/rules/${id}` : '/api/alarms/rules';
             const method = id ? 'PUT' : 'POST';
             const res = await apiRequest(url, method, data);
             
@@ -205,7 +205,7 @@ class AlarmRulesManager {
         if (!rule) return;
         
         try {
-            const res = await apiRequest(`/api/alarm-rules/${id}/toggle`, 'POST');
+            const res = await apiRequest(`/api/alarms/rules/${id}/toggle`, 'POST');
             if (res && res.success) {
                 showToast('状态切换成功', 'success');
                 await this.loadRules();
@@ -221,7 +221,7 @@ class AlarmRulesManager {
         if (!confirm(`确定要删除规则「${name}」吗？`)) return;
         
         try {
-            const res = await apiRequest(`/api/alarm-rules/${id}`, 'DELETE');
+            const res = await apiRequest(`/api/alarms/rules/${id}`, 'DELETE');
             if (res && res.success) {
                 showToast('规则已删除', 'success');
                 await this.loadRules();

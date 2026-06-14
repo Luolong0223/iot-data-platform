@@ -348,43 +348,6 @@ def get_active_devices():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@dashboard_bp.route('/api/dashboard/recent-data')
-@login_required
-def recent_data():
-    """获取最新数据点"""
-    try:
-        limit = request.args.get('limit', 10, type=int)
-        from models.database import DataPoint, SlaveChannel, Device
-        
-        query = DataPoint.query.join(
-            SlaveChannel, SlaveChannel.id == DataPoint.channel_id
-        ).join(
-            Device, Device.id == SlaveChannel.device_id
-        ).order_by(DataPoint.timestamp.desc())
-        
-        if not current_user.is_admin:
-            query = query.filter(Device.user_id == current_user.id)
-        
-        results = query.limit(limit).all()
-        
-        data = []
-        for dp in results:
-            channel = dp.channel
-            device = channel.device if channel else None
-            data.append({
-                'id': dp.id,
-                'device_name': device.name if device else '-',
-                'channel_name': channel.name if channel else '-',
-                'data_value': dp.value,
-                'timestamp': dp.timestamp.strftime('%Y-%m-%d %H:%M:%S') if dp.timestamp else '-'
-            })
-        
-        return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        current_app.logger.error(f"获取最新数据失败: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 @dashboard_bp.route('/api/dashboard/realtime-stream')
 @login_required
 def realtime_stream():

@@ -63,7 +63,7 @@ class DevicesPageV2 {
             const response = await apiRequest(`/api/devices?${params}`);
             
             if (response && response.success) {
-                const devices = response.data || [];
+                const devices = response.devices || [];
                 this.renderTable(devices);
                 this.updateStats(devices);
             } else {

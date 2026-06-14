@@ -211,7 +211,7 @@ class AlarmsPageV2 {
         this.trendChart = echarts.init(dom);
 
         // Load trend data
-        apiRequest('/api/alarms/trend?days=7').then(response => {
+        apiRequest('/api/alarms/stats/chart?days=7').then(response => {
             if (response && response.success && response.data) {
                 const data = response.data;
                 this.trendChart.setOption({
