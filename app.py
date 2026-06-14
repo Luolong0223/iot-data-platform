@@ -113,10 +113,13 @@ def create_app(config_name=None):
     
     # API 路由免除 CSRF（所有 /api/ 前缀）
     csrf.exempt(auth_bp)
+    csrf.exempt(admin_bp)
     csrf.exempt(devices_bp)
     csrf.exempt(data_bp)
     csrf.exempt(tcp_bp)
+    csrf.exempt(pages_bp)
     csrf.exempt(alarms_bp)
+    csrf.exempt(stream_bp)
     csrf.exempt(health_bp)
     csrf.exempt(export_bp)
     csrf.exempt(groups_bp)

@@ -2,7 +2,7 @@
 (function() {
     'use strict';
 
-    const API = '/api';
+    const API = '/api/platform';
     let _currentShadowId = null;
 
     function authHeaders() {
@@ -11,6 +11,16 @@
 
     async function api(path, opts = {}) {
         const resp = await fetch(API + path, {
+            credentials: 'same-origin',
+            headers: authHeaders(),
+            ...opts
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+    }
+
+    async function devicesApi(path, opts = {}) {
+        const resp = await fetch('/api/devices' + path, {
             credentials: 'same-origin',
             headers: authHeaders(),
             ...opts
@@ -255,7 +265,7 @@
                     r.data.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
             }
             // 同步设备下拉
-            const devR = await api('/devices?limit=1000');
+            const devR = await devicesApi('?limit=1000');
             const devSel = document.getElementById('assignDevice');
             if (devSel && devR.success) {
                 devSel.innerHTML = '<option value="">选择设备</option>' +
