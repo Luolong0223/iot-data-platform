@@ -45,7 +45,34 @@ def create_app(config_name=None):
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        # 防御:如果 MySQL 缺少列(权限不足导致迁移失败),尝试懒加载修复
+        try:
+            return User.query.get(int(user_id))
+        except Exception as e:
+            err_msg = str(e)
+            if 'Unknown column' in err_msg or '1054' in err_msg:
+                # 提取缺失的列名
+                import re
+                m = re.search(r"Unknown column '([^']+)'", err_msg)
+                missing_col = m.group(1) if m else '?'
+                app.logger.error(
+                    f"[load_user] 数据库缺少列 '{missing_col}',请运行 migration_manual.sql"
+                )
+                # 尝试执行迁移
+                try:
+                    from migrate_db import EXPECTED_COLUMNS, get_existing_columns, get_all_tables, add_column
+                    with db.engine.connect() as conn:
+                        for table, columns in EXPECTED_COLUMNS.items():
+                            for col_name, col_def in columns:
+                                if col_name == missing_col.split('.')[-1]:
+                                    if table in get_all_tables(conn) and missing_col.split('.')[-1] not in get_existing_columns(conn, table):
+                                        result = add_column(conn, table, col_name, col_def)
+                                        app.logger.info(f"[load_user] 紧急迁移 {table}.{col_name}: {result}")
+                    # 重试查询
+                    return User.query.get(int(user_id))
+                except Exception as migrate_err:
+                    app.logger.error(f"[load_user] 紧急迁移失败: {migrate_err}")
+            raise
 
     # 注册蓝图（API 路由 - CSRF豁免）
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -81,26 +108,52 @@ def create_app(config_name=None):
     # 创建数据库表
     with app.app_context():
         db.create_all()
+
         # 自动迁移: 补全缺失列(防止生产 MySQL 与模型不同步)
+        # 关键:把结果直接打印到 stdout,你重启时能直接看到
+        print("=" * 60)
+        print("🔧 [数据库迁移] 开始检查缺失列...")
+        print("=" * 60)
         try:
             from migrate_db import EXPECTED_COLUMNS, get_existing_columns, get_all_tables, add_column
-            from sqlalchemy import inspect
             with db.engine.connect() as conn:
                 existing_tables = get_all_tables(conn)
+                total_added = 0
+                total_failed = 0
                 for table, columns in EXPECTED_COLUMNS.items():
                     if table not in existing_tables:
+                        print(f"   ⏭️  {table} (表不存在,跳过)")
                         continue
                     existing = get_existing_columns(conn, table)
                     for col_name, col_def in columns:
                         if col_name in existing:
                             continue
+                        print(f"   ➕ 正在添加 {table}.{col_name} ...", end=' ', flush=True)
                         result = add_column(conn, table, col_name, col_def)
                         if result is True:
-                            app.logger.info(f"[Migrate] Added column {table}.{col_name}")
+                            print("✅")
+                            total_added += 1
                         else:
-                            app.logger.warning(f"[Migrate] {table}.{col_name}: {result}")
+                            print(f"❌ {result}")
+                            total_failed += 1
+                print("=" * 60)
+                if total_failed == 0 and total_added == 0:
+                    print("✅ [数据库迁移] schema 已同步,无需变更")
+                elif total_failed == 0:
+                    print(f"✅ [数据库迁移] 成功添加 {total_added} 个列")
+                else:
+                    print(f"⚠️  [数据库迁移] 添加 {total_added} 个,失败 {total_failed} 个")
+                    print("⚠️  失败原因通常是 MySQL 用户缺少 ALTER 权限")
+                    print("⚠️  请参考 migration_manual.sql 手动执行,或联系 DBA 授权")
+                print("=" * 60)
         except Exception as e:
-            app.logger.warning(f"[Migrate] 自动迁移失败(可忽略): {e}")
+            import traceback
+            print(f"❌ [数据库迁移] 异常: {e}")
+            traceback.print_exc()
+            print("=" * 60)
+            print("⚠️  迁移失败不影响应用启动,但部分查询可能报错")
+            print("⚠️  请参考 migration_manual.sql 手动执行")
+            print("=" * 60)
 
         # 启动 TCP 服务
         from services.tcp_listener import start_tcp_listener
