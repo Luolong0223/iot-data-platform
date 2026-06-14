@@ -1335,3 +1335,152 @@ class DeviceMaintenanceRecord(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+# ========================================================================
+# 地理围栏与轨迹追踪 (Geofence & Track)
+# ========================================================================
+
+class Geofence(db.Model):
+    """地理围栏"""
+    __tablename__ = 'geofences'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 围栏类型: circle / polygon
+    fence_type = db.Column(db.String(32), nullable=False, index=True)
+    
+    # 圆形围栏: center_lat, center_lng, radius
+    center_lat = db.Column(db.Float, nullable=True)
+    center_lng = db.Column(db.Float, nullable=True)
+    radius = db.Column(db.Float, nullable=True)  # 米
+    
+    # 多边形围栏: vertices (JSON array of [lat, lng])
+    vertices = db.Column(db.Text, nullable=True)
+    
+    # 告警配置
+    alert_on_enter = db.Column(db.Boolean, default=True, nullable=False)
+    alert_on_exit = db.Column(db.Boolean, default=True, nullable=False)
+    alert_severity = db.Column(db.String(32), default='warning', nullable=False)
+    
+    # 状态
+    is_enabled = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='geofences')
+    alerts = db.relationship('GeofenceAlert', backref='geofence', cascade='all, delete-orphan', lazy='dynamic')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'fence_type': self.fence_type,
+            'center_lat': self.center_lat,
+            'center_lng': self.center_lng,
+            'radius': self.radius,
+            'vertices': _json.loads(self.vertices) if self.vertices else None,
+            'alert_on_enter': self.alert_on_enter,
+            'alert_on_exit': self.alert_on_exit,
+            'alert_severity': self.alert_severity,
+            'is_enabled': self.is_enabled,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class GeofenceAlert(db.Model):
+    """地理围栏告警记录"""
+    __tablename__ = 'geofence_alerts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    geofence_id = db.Column(db.Integer, db.ForeignKey('geofences.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    # 告警类型: enter / exit
+    alert_type = db.Column(db.String(16), nullable=False, index=True)
+    
+    # 设备位置
+    device_lat = db.Column(db.Float, nullable=False)
+    device_lng = db.Column(db.Float, nullable=False)
+    
+    # 告警详情
+    message = db.Column(db.String(500), nullable=True)
+    severity = db.Column(db.String(32), default='warning', nullable=False)
+    
+    # 状态
+    is_read = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    device = db.relationship('Device', backref=db.backref('geofence_alerts', cascade='all, delete-orphan'))
+    user = db.relationship('User', backref='geofence_alerts')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'geofence_id': self.geofence_id,
+            'geofence_name': self.geofence.name if self.geofence else None,
+            'device_id': self.device_id,
+            'device_name': self.device.name if self.device else None,
+            'alert_type': self.alert_type,
+            'device_lat': self.device_lat,
+            'device_lng': self.device_lng,
+            'message': self.message,
+            'severity': self.severity,
+            'is_read': self.is_read,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class TrackPoint(db.Model):
+    """轨迹点"""
+    __tablename__ = 'track_points'
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    # 位置
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    altitude = db.Column(db.Float, nullable=True)
+    
+    # 速度、方向
+    speed = db.Column(db.Float, nullable=True)  # m/s
+    heading = db.Column(db.Float, nullable=True)  # 度
+    
+    # 精度
+    accuracy = db.Column(db.Float, nullable=True)  # 米
+    
+    # 时间戳
+    recorded_at = db.Column(db.DateTime, nullable=False, index=True)
+    
+    # 元数据 (JSON)
+    track_metadata = db.Column(db.Text, nullable=True)
+
+    device = db.relationship('Device', backref=db.backref('track_points', cascade='all, delete-orphan', lazy='dynamic'))
+    user = db.relationship('User', backref='track_points')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'device_id': self.device_id,
+            'device_name': self.device.name if self.device else None,
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'altitude': self.altitude,
+            'speed': self.speed,
+            'heading': self.heading,
+            'accuracy': self.accuracy,
+            'recorded_at': self.recorded_at.isoformat() if self.recorded_at else None,
+            'metadata': _json.loads(self.track_metadata) if self.track_metadata else None,
+        }

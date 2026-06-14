@@ -33,6 +33,7 @@ from routes.monitor import monitor_bp
 from routes.simulator import simulator_bp
 from routes.protocol import protocol_bp
 from routes.lifecycle import lifecycle_bp
+from routes.geofence import geofence_bp
 from services.api_docs import docs_bp
 
 logging.basicConfig(level=logging.INFO)
@@ -122,6 +123,7 @@ def create_app(config_name=None):
     csrf.exempt(simulator_bp)
     csrf.exempt(monitor_bp)
     csrf.exempt(lifecycle_bp)
+    csrf.exempt(geofence_bp)
     # 占位，平台/可视化/RBAC 蓝图在下方注册后会被 exempt
     
     login_manager.login_view = 'pages.login'
@@ -166,6 +168,7 @@ def create_app(config_name=None):
     from routes.custom_dashboard import custom_dashboard_bp
     app.register_blueprint(custom_dashboard_bp)
     app.register_blueprint(protocol_bp)
+    app.register_blueprint(geofence_bp)
 
     app.register_blueprint(docs_bp)
 
