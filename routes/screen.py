@@ -285,3 +285,89 @@ def get_point_trend():
     except Exception as e:
         current_app.logger.error(f"获取数据点趋势失败: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@screen_bp.route('/api/screen/summary')
+@login_required
+def get_screen_summary():
+    """获取大屏概览数据"""
+    from models.database import db, Device, SlaveChannel, DataPoint, AlarmRecord
+    
+    try:
+        # 设备统计
+        if current_user.is_admin:
+            total_devices = Device.query.count()
+            online_devices = Device.query.filter_by(is_online=True).count()
+            total_alarms = AlarmRecord.query.filter_by(is_handled=False).count()
+            
+            # 今日数据点
+            today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_data_points = DataPoint.query.filter(DataPoint.timestamp >= today_start).count()
+            
+            # 获取设备列表（带位置信息）
+            devices = Device.query.limit(100).all()
+        else:
+            total_devices = Device.query.filter_by(user_id=current_user.id).count()
+            online_devices = Device.query.filter_by(user_id=current_user.id, is_online=True).count()
+            total_alarms = AlarmRecord.query.filter_by(user_id=current_user.id, is_handled=False).count()
+            
+            device_ids = [d.id for d in Device.query.filter_by(user_id=current_user.id).all()]
+            channel_ids = [c.id for c in SlaveChannel.query.filter(SlaveChannel.device_id.in_(device_ids)).all()] if device_ids else []
+            
+            today_data_points = 0
+            if channel_ids:
+                today_data_points = DataPoint.query.filter(
+                    DataPoint.channel_id.in_(channel_ids),
+                    DataPoint.timestamp >= today_start
+                ).count()
+            
+            devices = Device.query.filter_by(user_id=current_user.id).limit(100).all()
+        
+        # 构建设备列表数据
+        device_list = []
+        for d in devices:
+            device_list.append({
+                'id': d.id,
+                'name': d.name or f'设备{d.id}',
+                'device_type': getattr(d, 'device_type', 'sensor'),
+                'is_online': d.is_online,
+                'lat': getattr(d, 'lat', None),
+                'lng': getattr(d, 'lng', None),
+                'latest_value': None  # 需要额外查询
+            })
+        
+        # 获取最近的数据点用于实时列表
+        recent_points = []
+        if current_user.is_admin:
+            points_query = DataPoint.query.order_by(DataPoint.timestamp.desc()).limit(10).all()
+        elif channel_ids:
+            points_query = DataPoint.query.filter(
+                DataPoint.channel_id.in_(channel_ids)
+            ).order_by(DataPoint.timestamp.desc()).limit(10).all()
+        else:
+            points_query = []
+        
+        for p in (points_query or []):
+            recent_points.append({
+                'id': p.id,
+                'name': p.name or '未知',
+                'value': p.value,
+                'timestamp': p.timestamp.isoformat() if p.timestamp else None,
+                'channel_id': p.channel_id
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_devices': total_devices,
+                'online_devices': online_devices,
+                'offline_devices': total_devices - online_devices,
+                'total_alarms': total_alarms,
+                'data_points_today': today_data_points,
+                'devices': device_list,
+                'recent_data_points': recent_points
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"获取大屏概览数据失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500

@@ -70,6 +70,16 @@ def get_stats():
         return jsonify({
             'success': True,
             'data': {
+                # 扁平化数据格式，便于前端直接使用
+                'total_devices': total_devices,
+                'online_devices': online_devices,
+                'offline_devices': offline_devices,
+                'online_rate': online_rate,
+                'total_alarms': total_alarms,
+                'unhandled_alarms': total_alarms,  # 未处理告警 = 未读告警
+                'active_rules': 0,  # TODO: 从规则表统计
+                'data_points_today': today_data_points,
+                # 保留原有嵌套格式（兼容）
                 'devices': {
                     'total': total_devices,
                     'online': online_devices,
@@ -106,11 +116,22 @@ def get_trend():
         end_time = datetime.now()
         start_time = end_time - timedelta(hours=hours)
         
-        # 构建查询
-        query = db.session.query(
-            func.strftime('%Y-%m-%d %H:00', DataPoint.timestamp).label('hour'),
-            func.count(DataPoint.id).label('count')
-        ).filter(DataPoint.timestamp >= start_time)
+        # 构建查询 - 兼容MySQL和SQLite
+        from config import get_config
+        db_config = get_config()
+        
+        if 'mysql' in str(db_config.get('SQLALCHEMY_DATABASE_URI', '')).lower():
+            # MySQL 使用 DATE_FORMAT
+            query = db.session.query(
+                func.date_format(DataPoint.timestamp, '%Y-%m-%d %H:00').label('hour'),
+                func.count(DataPoint.id).label('count')
+            ).filter(DataPoint.timestamp >= start_time)
+        else:
+            # SQLite 使用 strftime
+            query = db.session.query(
+                func.strftime('%Y-%m-%d %H:00', DataPoint.timestamp).label('hour'),
+                func.count(DataPoint.id).label('count')
+            ).filter(DataPoint.timestamp >= start_time)
         
         # 权限过滤
         if not current_user.is_admin:
@@ -127,17 +148,23 @@ def get_trend():
         
         results = query.all()
         
-        # 构建返回数据
-        trend_data = []
+        # 构建返回数据 - 适配前端期望格式
+        timestamps = []
+        data_points = []
+        alarms = []  # TODO: 从告警表统计
+        
         for row in results:
-            trend_data.append({
-                'time': row.hour,
-                'count': row.count
-            })
+            timestamps.append(row.hour)
+            data_points.append(row.count)
+            alarms.append(0)  # 暂时填充0
         
         return jsonify({
             'success': True,
-            'data': trend_data
+            'data': {
+                'timestamps': timestamps,
+                'data_points': data_points,
+                'alarms': alarms
+            }
         })
     except Exception as e:
         current_app.logger.error(f"获取趋势数据失败: {e}")

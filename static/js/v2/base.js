@@ -142,17 +142,21 @@
     // API Helper Functions
     // ========================================
     
-    window.apiRequest = async function(url, options = {}) {
-        const defaultOptions = {
+    window.apiRequest = async function(url, method = 'GET', data = null) => {
+        const options = {
+            method: method.toUpperCase(),
             headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
+                'Content-Type': 'application/json'
             },
             credentials: 'same-origin'
         };
         
+        if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+            options.body = JSON.stringify(data);
+        }
+        
         try {
-            const response = await fetch(url, { ...defaultOptions, ...options });
+            const response = await fetch(url, options);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);

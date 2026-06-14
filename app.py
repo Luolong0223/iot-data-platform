@@ -155,6 +155,8 @@ def create_app(config_name=None):
     app.register_blueprint(realtime_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(projects_bp)
+    from routes.hierarchy import hierarchy_bp
+    app.register_blueprint(hierarchy_bp)
     app.register_blueprint(alarm_rules_bp)
     app.register_blueprint(screen_bp)
     app.register_blueprint(platform_bp)

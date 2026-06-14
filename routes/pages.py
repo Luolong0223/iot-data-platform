@@ -62,7 +62,14 @@ def data_view():
 @pages_bp.route('/map')
 @login_required
 def map_view():
-    return render_template('map.html', baidu_map_ak=current_app.config.get('BAIDU_MAP_AK', ''))
+    return render_template('map_v2.html', baidu_map_ak=current_app.config.get('BAIDU_MAP_AK', ''))
+
+
+@pages_bp.route('/map_v2')
+@login_required
+def map_view_v2():
+    """地图展示页面（新版）"""
+    return render_template('map_v2.html', baidu_map_ak=current_app.config.get('BAIDU_MAP_AK', ''))
 
 
 @pages_bp.route('/profile')
@@ -88,7 +95,14 @@ def alarm_rules():
 @login_required
 def hierarchy():
     """设备层级管理页面"""
-    return render_template('hierarchy.html')
+    return render_template('hierarchy_v2.html')
+
+
+@pages_bp.route('/hierarchy_v2')
+@login_required
+def hierarchy_v2():
+    """设备层级管理页面（新版）"""
+    return render_template('hierarchy_v2.html')
 
 
 @pages_bp.route('/screen')
