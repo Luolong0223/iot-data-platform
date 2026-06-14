@@ -1,564 +1,360 @@
 /**
  * Map V2 - IoT Data Platform
- * 地图展示 - 设备位置可视化（百度地图）
+ * 设备地图展示 - Leaflet + OpenStreetMap
  */
 
 class MapV2 {
     constructor() {
         this.map = null;
         this.markers = [];
-        this.heatmapOverlay = null;
+        this.markerCluster = null;
+        this.heatLayer = null;
         this.devices = [];
-        this.selectedDevice = null;
+        this.currentFilter = '';
         this.init();
     }
 
     async init() {
         console.log('[Map] Initializing...');
         
-        // 等待百度地图API加载完成
-        if (typeof BMap === 'undefined') {
-            // 如果百度地图未加载，等待后重试
-            await this.waitForBaiduMap();
-        }
+        // 初始化地图
+        this.initMap();
         
-        try {
-            this.initMap();
-            await this.loadDevices();
-            this.bindEvents();
-            
-            // 隐藏加载提示
-            const loading = document.getElementById('mapLoading');
-            if (loading) loading.style.display = 'none';
-            
-            // 启动自动刷新（每60秒）
-            setInterval(() => this.refreshDevices(), 60000);
-            
-            console.log('[Map] Initialized successfully');
-        } catch (error) {
-            console.error('[Map] Initialization error:', error);
-            this.showError('地图加载失败，请刷新页面重试');
-        }
+        // 加载设备数据
+        await this.loadDevices();
+        
+        // 绑定事件
+        this.bindEvents();
+        
+        // 隐藏加载提示
+        const loading = document.getElementById('mapLoading');
+        if (loading) loading.style.display = 'none';
+        
+        console.log('[Map] Initialized successfully');
     }
 
-    // 等待百度地图API加载
-    waitForBaiduMap() {
-        return new Promise((resolve, reject) => {
-            let attempts = 0;
-            const maxAttempts = 30; // 最多等15秒
-            
-            const checkInterval = setInterval(() => {
-                attempts++;
-                if (typeof BMap !== 'undefined') {
-                    clearInterval(checkInterval);
-                    resolve();
-                } else if (attempts >= maxAttempts) {
-                    clearInterval(checkInterval);
-                    reject(new Error('Baidu Map API load timeout'));
-                }
-            }, 500);
-        });
-    }
-
-    // 初始化地图
     initMap() {
-        const container = document.getElementById('mapContainer');
-        if (!container) throw new Error('Map container not found');
-
-        // 创建地图实例
-        this.map = new BMap.Map('mapContainer', {
-            enableMapClick: true,
-            minZoom: 3,
-            maxZoom: 18
-        });
-
-        // 设置中心点（默认北京）
-        const point = new BMap.Point(116.404, 39.915);
-        this.map.centerAndZoom(point, 12);
-
-        // 启用控件
-        this.map.addControl(new BMap.NavigationControl({
-            anchor: BMAP_ANCHOR_TOP_LEFT,
-            type: BMAP_NAVIGATION_CONTROL_LARGE
-        }));
+        // 中国中心坐标
+        const center = [35.8617, 104.1954];
         
-        this.map.addControl(new BMap.ScaleControl({
-            anchor: BMAP_ANCHOR_BOTTOM_LEFT
-        }));
-
-        // 启用滚轮缩放
-        this.map.enableScrollWheelZoom(true);
-
-        // 添加地图类型切换事件
-        this.map.addEventListener('click', (e) => {
-            // 点击空白处关闭信息窗口
-            this.closeInfoWindow();
+        this.map = L.map('mapContainer', {
+            center: center,
+            zoom: 5,
+            zoomControl: true,
+            attributionControl: false
         });
+
+        // 使用 CartoDB 暗色主题瓦片（适合深色UI）
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+            subdomains: ['a', 'b', 'c', 'd']
+        }).addTo(this.map);
+
+        // 添加比例尺
+        L.control.scale({
+            imperial: false,
+            position: 'bottomleft'
+        }).addTo(this.map);
+
+        // 初始化聚合图层
+        this.markerCluster = L.markerClusterGroup({
+            chunkedLoading: true,
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true
+        });
+        this.map.addLayer(this.markerCluster);
     }
 
-    // 加载设备数据
     async loadDevices() {
         try {
-            // 优先使用带位置的设备API
-            const response = await apiRequest('/api/devices/location');
+            const response = await apiRequest('/api/platform/devices?limit=200');
             
-            if (response && response.devices) {
+            if (response && response.success && response.devices) {
                 this.devices = response.devices;
+            } else if (response && response.data) {
+                this.devices = response.data;
             } else {
-                // 回退到通用设备列表API
-                const fallbackResponse = await apiRequest('/api/devices?per_page=200');
-                if (fallbackResponse && fallbackResponse.devices) {
-                    this.devices = fallbackResponse.devices;
-                } else {
-                    // 使用示例数据
-                    this.loadSampleDevices();
-                    return;
-                }
-            }
-            
-            this.renderMarkers();
-            this.renderDeviceList();
-            this.updateStats();
-            
-            // 自动适应视图
-            if (this.devices.length > 0) {
-                setTimeout(() => this.fitAllMarkers(), 500);
+                // 使用示例数据
+                this.devices = this.getSampleDevices();
             }
         } catch (error) {
-            console.error('[Map] Load devices error:', error);
-            this.loadSampleDevices();
+            console.warn('[Map] API load failed, using sample data:', error.message);
+            this.devices = this.getSampleDevices();
         }
-    }
 
-    // 加载示例设备数据
-    loadSampleDevices() {
-        // 北京周边示例坐标（使用latitude/longitude字段名）
-        this.devices = [
-            { id: '1', name: '温度传感器#1', device_type: 'temperature', latitude: 39.915, longitude: 116.404, is_online: true, latest_value: '25.6°C', last_seen_at: new Date().toISOString() },
-            { id: '2', name: '湿度传感器#1', device_type: 'humidity', latitude: 39.920, longitude: 116.410, is_online: true, latest_value: '65%', last_seen_at: new Date().toISOString() },
-            { id: '3', name: '烟雾探测器#1', device_type: 'smoke', latitude: 39.910, longitude: 116.400, is_online: false, latest_value: '--', last_seen_at: new Date(Date.now() - 3600000).toISOString() },
-            { id: '4', name: '门磁传感器#1', device_type: 'door', latitude: 39.905, longitude: 116.415, is_online: true, latest_value: '关闭', last_seen_at: new Date().toISOString() },
-            { id: '5', name: '摄像头#1', device_type: 'camera', latitude: 39.925, longitude: 116.420, is_online: true, latest_value: '正常', last_seen_at: new Date().toISOString() },
-            { id: '6', name: '温度传感器#2', device_type: 'temperature', latitude: 39.900, longitude: 116.380, is_online: false, latest_value: '--', last_seen_at: new Date(Date.now() - 7200000).toISOString() },
-            { id: '7', name: 'UPS电源监控', device_type: 'ups', latitude: 39.895, longitude: 116.385, is_online: true, latest_value: '220V', last_seen_at: new Date().toISOString() },
-            { id: '8', name: '漏水检测器', device_type: 'water_leak', latitude: 39.898, longitude: 116.390, is_online: true, latest_value: '正常', last_seen_at: new Date().toISOString() },
-            { id: '9', name: '压力传感器#1', device_type: 'pressure', latitude: 39.930, longitude: 116.430, is_online: true, latest_value: '101.3kPa', last_seen_at: new Date().toISOString() },
-            { id: '10', name: '光照传感器#1', device_type: 'light', latitude: 39.908, longitude: 116.395, is_online: true, latest_value: '850lux', last_seen_at: new Date().toISOString() }
-        ];
-        
         this.renderMarkers();
-        this.renderDeviceList();
         this.updateStats();
-        setTimeout(() => this.fitAllMarkers(), 500);
     }
 
-    // 渲染标记点
+    getSampleDevices() {
+        // 北京周边示例设备数据
+        const baseLat = 39.9042;
+        const baseLng = 116.4074;
+        const types = ['温度传感器', '湿度传感器', '压力传感器', '流量计', '电表'];
+        const statuses = ['online', 'online', 'online', 'online', 'offline', 'alarm'];
+        
+        const samples = [];
+        for (let i = 0; i < 15; i++) {
+            const status = statuses[Math.floor(Math.random() * statuses.length)];
+            samples.push({
+                id: 1000 + i,
+                name: `${types[i % types.length]}-${String(i + 1).padStart(2, '0')}`,
+                device_type: types[i % types.length],
+                status: status,
+                latitude: baseLat + (Math.random() - 0.5) * 2,
+                longitude: baseLng + (Math.random() - 0.5) * 2,
+                lat: baseLat + (Math.random() - 0.5) * 2,
+                lng: baseLng + (Math.random() - 0.5) * 2,
+                latest_value: (Math.random() * 100).toFixed(1),
+                updated_at: new Date().toISOString()
+            });
+        }
+        return samples;
+    }
+
     renderMarkers() {
-        // 清除现有标记
-        this.clearMarkers();
-
-        this.devices.forEach(device => {
-            const marker = this.createMarker(device);
-            if (marker) {
-                this.markers.push(marker);
-                this.map.addOverlay(marker);
-            }
-        });
-
-        // 渲染热力图（如果开启）
-        const showHeatmap = document.getElementById('showHeatmap');
-        if (showHeatmap && showHeatmap.checked) {
-            this.renderHeatmap();
-        }
-    }
-
-    // 创建标记点
-    createMarker(device) {
-        // 支持两种字段名：lat/lng 或 latitude/longitude
-        const lat = device.lat || device.latitude;
-        const lng = device.lng || device.longitude;
-        
-        if (!lat || !lng) return null;
-
-        const point = new BMap.Point(parseFloat(lng), parseFloat(lat));
-        
-        // 创建自定义图标
-        const icon = this.createIcon(device);
-        
-        const marker = new BMap.Marker(point, { icon });
-        
-        // 存储设备数据
-        marker.deviceData = device;
-
-        // 点击事件
-        marker.addEventListener('click', () => {
-            this.showDeviceInfo(device);
-        });
-
-        // 鼠标悬停效果
-        marker.addEventListener('mouseover', () => {
-            marker.setZIndex(100);
-        });
-        
-        marker.addEventListener('mouseout', () => {
-            marker.setZIndex(0);
-        });
-
-        return marker;
-    }
-
-    // 创建图标
-    createIcon(device) {
-        let iconUrl, iconSize;
-        
-        if (!device.is_online) {
-            // 离线设备 - 灰色
-            iconUrl = 'data:image/svg+xml;base64,' + btoa(`
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
-                    <path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 26 16 26s16-15 16-26c0-8.837-7.163-16-16-16z" fill="#64748b"/>
-                    <circle cx="16" cy="16" r="6" fill="#94a3b8"/>
-                </svg>
-            `);
-            iconSize = new BMap.Size(24, 32);
-        } else {
-            // 在线设备 - 根据类型选择颜色
-            const color = this.getDeviceColor(device.device_type);
-            iconUrl = 'data:image/svg+xml;base64,' + btoa(`
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
-                    <path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 26 16 26s16-15 16-26c0-8.837-7.163-16-16-16z" fill="${color}"/>
-                    <circle cx="16" cy="16" r="6" fill="#fff"/>
-                </svg>
-            `);
-            iconSize = new BMap.Size(28, 38);
-        }
-
-        return new BMap.Icon(iconUrl, iconSize, {
-            anchor: new BMap.Size(iconSize.width / 2, iconSize.height),
-            infoWindowAnchor: new BMap.Size(iconSize.width / 2, 0)
-        });
-    }
-
-    // 获取设备颜色
-    getDeviceColor(type) {
-        const colors = {
-            'temperature': '#ef4444',
-            'humidity': '#3b82f6',
-            'smoke': '#f97316',
-            'door': '#10b981',
-            'camera': '#8b5cf6',
-            'ups': '#eab308',
-            'water_leak': '#06b6d4',
-            'pressure': '#ec4899',
-            'light': '#f59e0b'
-        };
-        return colors[type] || '#22c55e';
-    }
-
-    // 清除所有标记
-    clearMarkers() {
-        this.markers.forEach(marker => {
-            this.map.removeOverlay(marker);
-        });
+        // 清除旧标记
+        this.markerCluster.clearLayers();
         this.markers = [];
 
-        // 清除热力图
-        if (this.heatmapOverlay) {
-            this.map.removeOverlay(this.heatmapOverlay);
-            this.heatmapOverlay = null;
+        const filteredDevices = this.currentFilter 
+            ? this.devices.filter(d => d.status === this.currentFilter)
+            : this.devices;
+
+        const heatData = [];
+
+        filteredDevices.forEach(device => {
+            const lat = parseFloat(device.latitude || device.lat || 0);
+            const lng = parseFloat(device.longitude || device.lng || 0);
+            
+            if (!lat || !lng) return;
+
+            // 创建自定义图标
+            const icon = this.createDeviceIcon(device);
+            const marker = L.marker([lat, lng], { icon });
+
+            // 弹窗内容
+            const popupContent = `
+                <div class="map-popup">
+                    <div class="popup-title">${device.name || '未知设备'}</div>
+                    <div class="popup-row">类型: <span class="popup-value">${device.device_type || '--'}</span></div>
+                    <div class="popup-row">状态: <span class="popup-value" style="color:${this.getStatusColor(device.status)}">${this.getStatusText(device.status)}</span></div>
+                    <div class="popup-row">最新值: <span class="popup-value">${device.latest_value || '--'}</span></div>
+                </div>
+            `;
+            marker.bindPopup(popupContent, { offset: [0, -20] });
+
+            // 点击事件
+            marker.on('click', () => {
+                this.showDeviceInfo(device);
+            });
+
+            this.markers.push(marker);
+            this.markerCluster.addLayer(marker);
+
+            // 热力图数据
+            heatData.push([lat, lng, device.status === 'alarm' ? 1 : 0.3]);
+        });
+
+        // 热力图
+        if (this.heatLayer) {
+            this.map.removeLayer(this.heatLayer);
+        }
+        this.heatData = heatData;
+
+        // 适应所有标记
+        if (this.markers.length > 0) {
+            const group = L.featureGroup(this.markers);
+            this.map.fitBounds(group.getBounds().pad(0.1), { maxZoom: 12 });
         }
     }
 
-    // 显示设备详情
-    showDeviceInfo(device) {
-        this.selectedDevice = device;
-        
-        // 支持两种字段名
-        const lat = device.lat || device.latitude;
-        const lng = device.lng || device.longitude;
-        
-        // 更新弹窗内容
-        document.getElementById('infoDeviceName').textContent = device.name || '未命名设备';
-        document.getElementById('infoDeviceType').textContent = this.getTypeName(device.device_type);
-        document.getElementById('infoDeviceStatus').innerHTML = `
-            <span class="flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full ${device.is_online ? 'bg-emerald-500' : 'bg-slate-500'}"></span>
-                ${device.is_online ? '在线' : '离线'}
-            </span>
-        `;
-        document.getElementById('infoDeviceValue').textContent = device.latest_value || '--';
-        document.getElementById('infoDeviceTime').textContent = this.formatTime(device.last_seen_at || device.last_update);
-        document.getElementById('infoDetailLink').href = `/devices_v2?id=${device.id}`;
-        document.getElementById('infoDataLink').href = `/data_v2?device_id=${device.id}`;
+    createDeviceIcon(device) {
+        const status = device.status || 'offline';
+        const colors = {
+            online: '#10b981',
+            offline: '#64748b',
+            alarm: '#ef4444'
+        };
+        const color = colors[status] || colors.offline;
 
-        // 显示弹窗
-        document.getElementById('deviceInfoWindow').classList.remove('hidden');
-
-        // 高亮对应列表项
-        this.highlightDeviceInList(device.id);
-
-        // 地图移动到该点
-        if (lat && lng) {
-            const point = new BMap.Point(parseFloat(lng), parseFloat(lat));
-            this.map.panTo(point);
-        }
-    }
-
-    // 关闭信息窗口
-    closeInfoWindow() {
-        document.getElementById('deviceInfoWindow').classList.add('hidden');
-        this.selectedDevice = null;
-        this.clearListHighlight();
-    }
-
-    // 高亮列表项
-    highlightDeviceInList(deviceId) {
-        this.clearListHighlight();
-        const item = document.querySelector(`[data-device-id="${deviceId}"]`);
-        if (item) {
-            item.classList.add('bg-blue-600/20', 'border-blue-500/50');
-        }
-    }
-
-    // 清除列表高亮
-    clearListHighlight() {
-        document.querySelectorAll('[data-device-id]').forEach(item => {
-            item.classList.remove('bg-blue-600/20', 'border-blue-500/50');
+        return L.divIcon({
+            className: 'custom-device-marker',
+            html: `<div style="
+                width: 28px; height: 28px;
+                background: ${color};
+                border: 2px solid rgba(255,255,255,0.3);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 0 12px ${color}66;
+                transition: transform 0.2s;
+            ">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+            </div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+            popupAnchor: [0, -14]
         });
     }
 
-    // 渲染设备列表
+    showDeviceInfo(device) {
+        const panel = document.getElementById('deviceInfoPanel');
+        if (!panel) return;
+
+        document.getElementById('infoDeviceName').textContent = device.name || '未知设备';
+        document.getElementById('infoDeviceStatus').textContent = this.getStatusText(device.status);
+        document.getElementById('infoDeviceStatus').style.color = this.getStatusColor(device.status);
+        document.getElementById('infoDeviceValue').textContent = device.latest_value || '--';
+        document.getElementById('infoDeviceTime').textContent = device.updated_at 
+            ? new Date(device.updated_at).toLocaleString('zh-CN')
+            : '--';
+        
+        const detailLink = document.getElementById('infoDetailLink');
+        const dataLink = document.getElementById('infoDataLink');
+        if (detailLink) detailLink.href = `/devices?id=${device.id}`;
+        if (dataLink) dataLink.href = `/data?device_id=${device.id}`;
+
+        panel.style.display = 'block';
+    }
+
+    updateStats() {
+        const online = this.devices.filter(d => d.status === 'online').length;
+        const offline = this.devices.filter(d => d.status === 'offline').length;
+        const alarm = this.devices.filter(d => d.status === 'alarm').length;
+
+        const setEl = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        setEl('onlineCount', online);
+        setEl('offlineCount', offline);
+        setEl('alarmCount', alarm);
+
+        // 更新设备列表
+        this.renderDeviceList();
+    }
+
     renderDeviceList() {
         const container = document.getElementById('deviceListContainer');
         if (!container) return;
 
-        if (this.devices.length === 0) {
-            container.innerHTML = `
-                <div class="text-center py-8 text-slate-500">
-                    <i class="fas fa-map-marker-alt text-3xl mb-2 opacity-50"></i>
-                    <p class="text-sm">暂无带位置的设备</p>
-                </div>
-            `;
+        const filteredDevices = this.currentFilter
+            ? this.devices.filter(d => d.status === this.currentFilter)
+            : this.devices;
+
+        if (filteredDevices.length === 0) {
+            container.innerHTML = '<div class="text-center py-4 text-secondary small">暂无设备</div>';
             return;
         }
 
-        container.innerHTML = this.devices.map(device => `
-            <div data-device-id="${device.id}" 
-                 class="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 cursor-pointer transition-all"
-                 onclick="mapV2.focusDevice('${device.id}')">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2 min-w-0 flex-1">
-                        <span class="w-2 h-2 rounded-full ${device.is_online ? 'bg-emerald-500' : 'bg-slate-500'} flex-shrink-0"></span>
-                        <span class="text-sm font-medium text-white truncate">${device.name}</span>
-                    </div>
+        container.innerHTML = filteredDevices.slice(0, 50).map(d => `
+            <div class="d-flex align-items-center justify-content-between p-2 rounded mb-1 device-list-item"
+                 style="background:rgba(15,23,42,0.4);cursor:pointer;"
+                 onclick="mapV2.focusDevice(${d.id})">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="rounded-circle d-inline-block" style="width:8px;height:8px;background:${this.getStatusColor(d.status)};"></span>
+                    <span class="small text-white" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.name || '未知'}</span>
                 </div>
-                <div class="flex items-center justify-between text-xs text-slate-400">
-                    <span>${this.getTypeName(device.device_type)}</span>
-                    <span class="font-mono">${device.latest_value || '--'}</span>
-                </div>
+                <span class="small text-secondary">${d.latest_value || '--'}</span>
             </div>
         `).join('');
     }
 
-    // 聚焦到设备
     focusDevice(deviceId) {
         const device = this.devices.find(d => d.id === deviceId);
-        if (device) {
-            this.showDeviceInfo(device);
-        }
-    }
+        if (!device) return;
 
-    // 更新统计数据
-    updateStats() {
-        const online = this.devices.filter(d => d.is_online).length;
-        const offline = this.devices.length - online;
-        // 假设部分在线设备有告警
-        const alarm = Math.floor(online * 0.1); // 10%的在线设备有告警
+        const lat = parseFloat(device.latitude || device.lat || 0);
+        const lng = parseFloat(device.longitude || device.lng || 0);
+        if (!lat || !lng) return;
 
-        const elOnline = document.getElementById('onlineCount');
-        const elOffline = document.getElementById('offlineCount');
-        const elAlarm = document.getElementById('alarmCount');
-
-        if (elOnline) elOnline.textContent = online;
-        if (elOffline) elOffline.textContent = offline;
-        if (elAlarm) elAlarm.textContent = alarm;
-    }
-
-    // 渲染热力图
-    renderHeatmap() {
-        if (!this.heatmapOverlay && typeof BMapLib !== 'undefined' && BMapLib.HeatmapOverlay) {
-            this.heatmapOverlay = new BMapLib.HeatmapOverlay({"radius": 20});
-            this.map.addOverlay(this.heatmapOverlay);
-        }
-
-        if (this.heatmapOverlay) {
-            const points = this.devices
-                .filter(d => d.is_online)
-                .map(d => ({
-                    lng: parseFloat(d.lng || d.longitude),
-                    lat: parseFloat(d.lat || d.latitude),
-                    count: 1
-                }));
-            
-            this.heatmapOverlay.setDataSet({data: points, max: 10});
-        }
-    }
-
-    // 绑定事件
-    bindEvents() {
-        // 地图类型切换
-        const mapTypeSelect = document.getElementById('mapType');
-        if (mapTypeSelect) {
-            mapTypeSelect.addEventListener('change', (e) => {
-                switch(e.target.value) {
-                    case 'satellite':
-                        this.map.setMapType(B_SATELLITE_MAP);
-                        break;
-                    case 'terrain':
-                        this.map.setMapType(B_HYBRID_MAP);
-                        break;
-                    default:
-                        this.map.setMapType(B_NORMAL_MAP);
-                }
-            });
-        }
-
-        // 设备筛选
-        const deviceFilter = document.getElementById('deviceFilter');
-        if (deviceFilter) {
-            deviceFilter.addEventListener('change', (e) => {
-                this.filterDevices(e.target.value);
-            });
-        }
-
-        // 热力图开关
-        const heatmapCheckbox = document.getElementById('showHeatmap');
-        if (heatmapCheckbox) {
-            heatmapCheckbox.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    this.renderHeatmap();
-                } else if (this.heatmapOverlay) {
-                    this.map.removeOverlay(this.heatmapOverlay);
-                    this.heatmapOverlay = null;
-                }
-            });
-        }
-    }
-
-    // 过滤设备
-    filterDevices(filter) {
-        let filteredDevices = [...this.devices];
+        this.map.setView([lat, lng], 14, { animate: true });
         
-        switch(filter) {
-            case 'online':
-                filteredDevices = filteredDevices.filter(d => d.is_online);
-                break;
-            case 'offline':
-                filteredDevices = filteredDevices.filter(d => !d.is_online);
-                break;
-            case 'alarm':
-                // 假设有告警的设备（实际应从API获取）
-                filteredDevices = filteredDevices.filter((d, i) => i % 5 === 0 && d.is_online);
-                break;
-        }
-
-        // 重新渲染标记
-        this.clearMarkers();
-        filteredDevices.forEach(device => {
-            const marker = this.createMarker(device);
-            if (marker) {
-                this.markers.push(marker);
-                this.map.addOverlay(marker);
-            }
-        });
-
-        // 更新列表显示
-        this.renderFilteredDeviceList(filteredDevices);
+        // 找到对应标记并打开弹窗
+        setTimeout(() => {
+            this.markers.forEach(m => {
+                const pos = m.getLatLng();
+                if (Math.abs(pos.lat - lat) < 0.0001 && Math.abs(pos.lng - lng) < 0.0001) {
+                    m.openPopup();
+                }
+            });
+        }, 500);
     }
 
-    // 渲染过滤后的设备列表
-    renderFilteredDeviceList(devices) {
-        const container = document.getElementById('deviceListContainer');
-        if (!container) return;
-
-        container.innerHTML = devices.map(device => `
-            <div data-device-id="${device.id}" 
-                 class="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 hover:border-slate-600 cursor-pointer transition-all"
-                 onclick="mapV2.focusDevice('${device.id}')">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2 min-w-0 flex-1">
-                        <span class="w-2 h-2 rounded-full ${device.is_online ? 'bg-emerald-500' : 'bg-slate-500'} flex-shrink-0"></span>
-                        <span class="text-sm font-medium text-white truncate">${device.name}</span>
-                    </div>
-                </div>
-                <div class="flex items-center justify-between text-xs text-slate-400">
-                    <span>${this.getTypeName(device.device_type)}</span>
-                    <span class="font-mono">${device.latest_value || '--'}</span>
-                </div>
-            </div>
-        `).join('');
+    refreshDevices() {
+        this.loadDevices();
     }
 
-    // 刷新设备
-    async refreshDevices() {
-        try {
-            await this.loadDevices();
-            showToast('设备数据已刷新', 'success');
-        } catch (error) {
-            console.error('[Map] Refresh error:', error);
-            showToast('刷新失败', 'error');
-        }
-    }
-
-    // 适应视图（显示所有标记）
     fitAllMarkers() {
-        if (this.markers.length === 0) return;
-
-        const points = this.markers.map(m => m.getPosition());
-        const viewport = this.map.getViewport(points);
-        this.map.centerAndZoom(viewport.center, viewport.zoom);
-    }
-
-    // 获取类型名称
-    getTypeName(type) {
-        const names = {
-            'temperature': '温度传感器',
-            'humidity': '湿度传感器',
-            'smoke': '烟雾探测器',
-            'door': '门磁传感器',
-            'camera': '摄像头',
-            'ups': 'UPS电源',
-            'water_leak': '漏水检测器',
-            'pressure': '压力传感器',
-            'light': '光照传感器'
-        };
-        return names[type] || type || '未知';
-    }
-
-    // 格式化时间
-    formatTime(timeStr) {
-        if (!timeStr) return '--';
-        try {
-            const date = new Date(timeStr);
-            return date.toLocaleString('zh-CN');
-        } catch (e) {
-            return timeStr;
+        if (this.markers.length > 0) {
+            const group = L.featureGroup(this.markers);
+            this.map.fitBounds(group.getBounds().pad(0.1), { maxZoom: 12 });
         }
     }
 
-    // 显示错误
-    showError(message) {
-        const loading = document.getElementById('mapLoading');
-        if (loading) {
-            loading.innerHTML = `
-                <div class="text-center">
-                    <i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-3"></i>
-                    <p class="text-white text-lg font-semibold mb-2">加载失败</p>
-                    <p class="text-slate-400 mb-4">${message}</p>
-                    <button onclick="location.reload()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                        刷新页面
-                    </button>
-                </div>
-            `;
+    toggleHeatmap(show) {
+        if (show) {
+            if (!this.heatLayer && this.heatData) {
+                this.heatLayer = L.heatLayer(this.heatData, {
+                    radius: 25,
+                    blur: 15,
+                    maxZoom: 10,
+                    gradient: { 0.4: '#10b981', 0.6: '#f59e0b', 0.8: '#ef4444' }
+                }).addTo(this.map);
+            }
+        } else {
+            if (this.heatLayer) {
+                this.map.removeLayer(this.heatLayer);
+                this.heatLayer = null;
+            }
+        }
+    }
+
+    bindEvents() {
+        // 设备筛选
+        const filterEl = document.getElementById('deviceFilter');
+        if (filterEl) {
+            filterEl.addEventListener('change', (e) => {
+                this.currentFilter = e.target.value;
+                this.renderMarkers();
+                this.renderDeviceList();
+            });
+        }
+
+        // 热力图切换
+        const heatmapEl = document.getElementById('showHeatmap');
+        if (heatmapEl) {
+            heatmapEl.addEventListener('change', (e) => {
+                this.toggleHeatmap(e.target.checked);
+            });
+        }
+
+        // 窗口大小变化时重新适应
+        window.addEventListener('resize', () => {
+            if (this.map) this.map.invalidateSize();
+        });
+    }
+
+    getStatusColor(status) {
+        const colors = { online: '#10b981', offline: '#64748b', alarm: '#ef4444' };
+        return colors[status] || '#64748b';
+    }
+
+    getStatusText(status) {
+        const texts = { online: '在线', offline: '离线', alarm: '告警' };
+        return texts[status] || '未知';
+    }
+
+    destroy() {
+        if (this.map) {
+            this.map.remove();
+            this.map = null;
         }
     }
 }
@@ -566,4 +362,11 @@ class MapV2 {
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', () => {
     window.mapV2 = new MapV2();
+});
+
+// 页面卸载时清理
+window.addEventListener('beforeunload', () => {
+    if (window.mapV2) {
+        window.mapV2.destroy();
+    }
 });
