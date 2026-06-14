@@ -36,6 +36,7 @@ from routes.lifecycle import lifecycle_bp
 from routes.geofence import geofence_bp
 from routes.command import command_bp
 from routes.report import report_bp
+from routes.tenant import tenant_bp
 from services.api_docs import docs_bp
 
 logging.basicConfig(level=logging.INFO)
@@ -173,6 +174,7 @@ def create_app(config_name=None):
     app.register_blueprint(geofence_bp)
     app.register_blueprint(command_bp)
     app.register_blueprint(report_bp)
+    app.register_blueprint(tenant_bp)
 
     app.register_blueprint(docs_bp)
 
@@ -188,6 +190,7 @@ def create_app(config_name=None):
     csrf.exempt(protocol_bp)
     csrf.exempt(command_bp)
     csrf.exempt(report_bp)
+    csrf.exempt(tenant_bp)
     csrf.exempt(docs_bp)
 
     with app.app_context():

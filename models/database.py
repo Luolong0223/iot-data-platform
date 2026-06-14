@@ -1644,3 +1644,183 @@ class ReportSchedule(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+# ========================================================================
+# 多租户隔离 (Multi-Tenant Isolation)
+# ========================================================================
+
+class Organization(db.Model):
+    """租户组织"""
+    __tablename__ = 'organizations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # 组织名称
+    name = db.Column(db.String(128), nullable=False, unique=True, index=True)
+    
+    # 组织描述
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 组织类型: enterprise / team / personal
+    org_type = db.Column(db.String(32), default='team', nullable=False, index=True)
+    
+    # 是否启用
+    enabled = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    
+    # 管理员用户ID
+    admin_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    
+    # 配额设置
+    max_users = db.Column(db.Integer, default=10, nullable=False)
+    max_devices = db.Column(db.Integer, default=100, nullable=False)
+    max_storage_mb = db.Column(db.Integer, default=1024, nullable=False)  # MB
+    
+    # 当前使用量
+    current_users = db.Column(db.Integer, default=0, nullable=False)
+    current_devices = db.Column(db.Integer, default=0, nullable=False)
+    current_storage_mb = db.Column(db.Float, default=0.0, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    admin_user = db.relationship('User', foreign_keys=[admin_user_id], backref='admin_organizations')
+    departments = db.relationship('Department', backref='organization', cascade='all, delete-orphan', lazy='dynamic')
+    members = db.relationship('OrganizationMember', backref='organization', cascade='all, delete-orphan', lazy='dynamic')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'org_type': self.org_type,
+            'enabled': self.enabled,
+            'admin_user_id': self.admin_user_id,
+            'max_users': self.max_users,
+            'max_devices': self.max_devices,
+            'max_storage_mb': self.max_storage_mb,
+            'current_users': self.current_users,
+            'current_devices': self.current_devices,
+            'current_storage_mb': self.current_storage_mb,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Department(db.Model):
+    """部门"""
+    __tablename__ = 'departments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 部门名称
+    name = db.Column(db.String(128), nullable=False, index=True)
+    
+    # 部门描述
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 父部门ID (支持多级部门)
+    parent_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True, index=True)
+    
+    # 是否启用
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    parent = db.relationship('Department', remote_side=[id], backref='children')
+    members = db.relationship('OrganizationMember', backref='department', lazy='dynamic')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'org_id': self.org_id,
+            'name': self.name,
+            'description': self.description,
+            'parent_id': self.parent_id,
+            'enabled': self.enabled,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class OrganizationMember(db.Model):
+    """组织成员"""
+    __tablename__ = 'organization_members'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True, index=True)
+    
+    # 角色: admin / manager / member
+    role = db.Column(db.String(32), default='member', nullable=False, index=True)
+    
+    # 是否启用
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+    
+    joined_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    user = db.relationship('User', backref='organization_memberships')
+
+    __table_args__ = (
+        db.UniqueConstraint('org_id', 'user_id', name='uq_org_member'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'org_id': self.org_id,
+            'user_id': self.user_id,
+            'username': self.user.username if self.user else None,
+            'department_id': self.department_id,
+            'department_name': self.department.name if self.department else None,
+            'role': self.role,
+            'enabled': self.enabled,
+            'joined_at': self.joined_at.isoformat() if self.joined_at else None,
+        }
+
+
+class QuotaUsage(db.Model):
+    """配额使用记录"""
+    __tablename__ = 'quota_usage'
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(db.Integer, db.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 资源类型: devices / storage / api_calls / users
+    resource_type = db.Column(db.String(32), nullable=False, index=True)
+    
+    # 使用量
+    usage = db.Column(db.Float, default=0.0, nullable=False)
+    
+    # 配额限制
+    quota_limit = db.Column(db.Float, nullable=False)
+    
+    # 统计周期
+    period_start = db.Column(db.DateTime, nullable=False, index=True)
+    period_end = db.Column(db.DateTime, nullable=False, index=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    organization = db.relationship('Organization', backref='quota_usage_records')
+
+    __table_args__ = (
+        db.UniqueConstraint('org_id', 'resource_type', 'period_start', name='uq_quota_usage'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'org_id': self.org_id,
+            'resource_type': self.resource_type,
+            'usage': self.usage,
+            'quota_limit': self.quota_limit,
+            'usage_percentage': round(self.usage / self.quota_limit * 100, 2) if self.quota_limit > 0 else 0,
+            'period_start': self.period_start.isoformat() if self.period_start else None,
+            'period_end': self.period_end.isoformat() if self.period_end else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
