@@ -12,24 +12,25 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('pages.dashboard'))
     
+    error = None
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         
         if not username or not password:
-            flash('请输入用户名和密码', 'error')
-            return render_template('login.html')
+            error = '请输入用户名和密码'
+            return render_template('login_v2.html', error=error)
         
         user = User.query.filter_by(username=username).first()
         if not user or not user.check_password(password):
-            flash('用户名或密码错误', 'error')
-            return render_template('login.html')
+            error = '用户名或密码错误'
+            return render_template('login_v2.html', error=error)
         
         remember = request.form.get('remember') == 'on'
         login_user(user, remember=remember)
         return redirect(url_for('pages.dashboard'))
     
-    return render_template('login.html')
+    return render_template('login_v2.html', error=None)
 
 
 @pages_bp.route('/logout')
@@ -43,19 +44,19 @@ def logout():
 @pages_bp.route('/dashboard')
 @login_required
 def dashboard():
-    return render_template('dashboard.html')
+    return render_template('dashboard_v2.html')
 
 
 @pages_bp.route('/devices')
 @login_required
 def devices():
-    return render_template('devices.html')
+    return render_template('devices_v2.html')
 
 
 @pages_bp.route('/data')
 @login_required
 def data_view():
-    return render_template('data_view.html')
+    return render_template('data_v2.html')
 
 
 @pages_bp.route('/map')
@@ -73,7 +74,7 @@ def profile():
 @pages_bp.route('/alarms')
 @login_required
 def alarms():
-    return render_template('alarms.html')
+    return render_template('alarms_v2.html')
 
 
 @pages_bp.route('/alarm-rules')
@@ -94,14 +95,14 @@ def hierarchy():
 @login_required
 def screen():
     """数据大屏"""
-    return render_template('screen.html')
+    return render_template('screen_v2.html', baidu_map_ak=current_app.config.get('BAIDU_MAP_AK', ''))
 
 
 @pages_bp.route('/platform')
 @login_required
 def platform():
     """平台增强中心：设备影子/标签/命令/协议/通知/审计/报表"""
-    return render_template('platform.html')
+    return render_template('platform_v2.html')
 
 
 @pages_bp.route('/rbac')

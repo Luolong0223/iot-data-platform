@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - IoT Data Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2/base.css') }}">
+    <style>
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 背景装饰 */
+        .login-bg-grid {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+        
+        .login-bg-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.15;
+        }
+        
+        .login-bg-glow-1 {
+            top: -200px;
+            right: -200px;
+            background: var(--primary-color);
+        }
+        
+        .login-bg-glow-2 {
+            bottom: -200px;
+            left: -200px;
+            background: var(--accent-color);
+        }
+        
+        /* 登录卡片 */
+        .login-card-wrapper {
+            display: flex;
+            width: 900px;
+            max-width: 95vw;
+            min-height: 520px;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 
+                0 25px 60px rgba(0, 0, 0, 0.4),
+                0 0 0 1px rgba(255, 255, 255, 0.05);
+            z-index: 10;
+        }
+        
+        .login-left {
+            flex: 1;
+            padding: 48px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(20px);
+            position: relative;
+        }
+        
+        .login-brand {
+            margin-bottom: 32px;
+        }
+        
+        .login-brand-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+        
+        .login-brand-icon i {
+            font-size: 28px;
+            color: white;
+        }
+        
+        .login-brand h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 4px;
+        }
+        
+        .login-brand p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        
+        .login-features {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .login-features li {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        
+        .login-features li i {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        
+        .login-right {
+            width: 400px;
+            padding: 48px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(20px);
+        }
+        
+        .login-form-header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+        
+        .login-form-header h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 6px;
+        }
+        
+        .login-form-header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        
+        .input-wrapper {
+            position: relative;
+        }
+        
+        .input-wrapper input {
+            width: 100%;
+            padding: 13px 16px 13px 44px;
+            background: rgba(51, 65, 85, 0.5);
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.25s ease;
+        }
+        
+        .input-wrapper input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+            background: rgba(51, 65, 85, 0.8);
+        }
+        
+        .input-wrapper input::placeholder {
+            color: var(--text-muted);
+        }
+        
+        .input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 16px;
+            pointer-events: none;
+        }
+        
+        .password-toggle {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            transition: color 0.2s;
+        }
+        
+        .password-toggle:hover {
+            color: var(--text-secondary);
+        }
+        
+        .form-options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+        
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .remember-me input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary-color);
+            cursor: pointer;
+        }
+        
+        .remember-me span {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .forgot-link {
+            font-size: 13px;
+            color: var(--primary-color);
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+        
+        .forgot-link:hover {
+            opacity: 0.8;
+        }
+        
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--primary-color), #2563eb);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-login:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.35);
+        }
+        
+        .btn-login:active {
+            transform: translateY(0);
+        }
+        
+        .btn-login.loading {
+            pointer-events: none;
+            opacity: 0.8;
+        }
+        
+        .btn-login .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+        }
+        
+        .btn-login.loading .spinner {
+            display: inline-block;
+        }
+        
+        .btn-login.loading .btn-text {
+            display: none;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: #ef4444;
+            font-size: 13px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .login-footer {
+            text-align: center;
+            margin-top: 28px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(71, 85, 105, 0.3);
+        }
+        
+        .login-footer p {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .login-card-wrapper {
+                flex-direction: column;
+                max-width: 420px;
+            }
+            
+            .login-left {
+                display: none;
+            }
+            
+            .login-right {
+                width: auto;
+                padding: 36px 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <!-- 背景装饰 -->
+        <div class="login-bg-grid"></div>
+        <div class="login-bg-glow login-bg-glow-1"></div>
+        <div class="login-bg-glow login-bg-glow-2"></div>
+        
+        <div class="login-card-wrapper">
+            <!-- 左侧品牌区 -->
+            <div class="login-left">
+                <div class="login-brand">
+                    <div class="login-brand-icon">
+                        <i class="bi bi-cpu-fill"></i>
+                    </div>
+                    <h1>IoT Data Platform</h1>
+                    <p>企业级物联网数据可视化平台</p>
+                </div>
+                
+                <ul class="login-features">
+                    <li><i class="bi bi-check-lg"></i> 实时数据采集与监控</li>
+                    <li><i class="bi bi-check-lg"></i> 多协议适配（MQTT/CoAP/Modbus）</li>
+                    <li><i class="bi bi-check-lg"></i> 智能告警与规则引擎</li>
+                    <li><i class="bi bi-check-lg"></i> 数据大屏可视化展示</li>
+                    <li><i class="bi bi-check-lg"></i> 多租户隔离与权限管理</li>
+                </ul>
+            </div>
+            
+            <!-- 右侧登录表单 -->
+            <div class="login-right">
+                <div class="login-form-header">
+                    <h2>欢迎回来</h2>
+                    <p>请输入您的账号信息登录系统</p>
+                </div>
+                
+                {% if error %}
+                <div class="error-message show">{{ error }}</div>
+                {% else %}
+                <div class="error-message" id="errorMsg"></div>
+                {% endif %}
+                
+                <form method="POST" action="{{ url_for('pages.login') }}" id="loginForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="form-group">
+                        <label for="username">用户名</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon"><i class="bi bi-person"></i></span>
+                            <input type="text" id="username" name="username" placeholder="请输入用户名" required autofocus autocomplete="username">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">密码</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon"><i class="bi bi-lock"></i></span>
+                            <input type="password" id="password" name="password" placeholder="请输入密码" required autocomplete="current-password">
+                            <span class="password-toggle" onclick="togglePassword()">
+                                <i class="bi bi-eye" id="toggleIcon"></i>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-options">
+                        <label class="remember-me">
+                            <input type="checkbox" name="remember" value="1">
+                            <span>记住我</span>
+                        </label>
+                        <a href="#" class="forgot-link">忘记密码？</a>
+                    </div>
+                    
+                    <button type="submit" class="btn-login" id="submitBtn">
+                        <span class="spinner"></span>
+                        <span class="btn-text">登 录</span>
+                    </button>
+                </form>
+                
+                <div class="login-footer">
+                    <p>&copy; 2025 IoT Data Platform. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 密码显示切换
+        function togglePassword() {
+            const pwd = document.getElementById('password');
+            const icon = document.getElementById('toggleIcon');
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+                icon.classList.replace('bi-eye', 'bi-eye-slash');
+            } else {
+                pwd.type = 'password';
+                icon.classList.replace('bi-eye-slash', 'bi-eye');
+            }
+        }
+        
+        // 表单提交加载状态
+        document.getElementById('loginForm').addEventListener('submit', function() {
+            const btn = document.getElementById('submitBtn');
+            btn.classList.add('loading');
+        });
+        
+        // 错误提示自动隐藏
+        const errorMsg = document.getElementById('errorMsg');
+        if (errorMsg && errorMsg.textContent) {
+            setTimeout(() => {
+                errorMsg.classList.remove('show');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,347 @@
+/* ============================================
+   IoT Data Platform - Responsive Design
+   Mobile-First Responsive Styles
+   ============================================ */
+
+/* ---- Breakpoints ---- */
+/* xs: 0 - 575px (mobile portrait) */
+/* sm: 576px - 767px (mobile landscape) */
+/* md: 768px - 991px (tablet) */
+/* lg: 992px - 1199px (desktop) */
+/* xl: 1200px+ (large desktop) */
+
+/* ---- Base Reset for Mobile ---- */
+@media screen and (max-width: 575.98px) {
+    /* Hide sidebar on mobile by default */
+    .sidebar {
+        position: fixed;
+        left: -280px;
+        z-index: 1050;
+        transition: left 0.3s ease;
+    }
+    
+    .sidebar.active {
+        left: 0;
+    }
+    
+    /* Main content full width */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+    
+    /* Top bar adjustments */
+    .topbar {
+        padding: 0 15px;
+    }
+    
+    .topbar .page-title {
+        font-size: 1rem;
+    }
+    
+    /* Cards stack vertically */
+    .stats-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px;
+    }
+    
+    .card-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Tables scroll horizontally */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .data-table {
+        min-width: 600px;
+    }
+    
+    /* Charts container */
+    .chart-container {
+        height: 250px !important;
+    }
+    
+    /* Modal full screen on mobile */
+    .modal-dialog {
+        margin: 10px;
+        max-width: none;
+    }
+    
+    .modal-content {
+        border-radius: 12px;
+    }
+    
+    /* Form elements full width */
+    .form-row {
+        flex-direction: column;
+    }
+    
+    .form-group {
+        margin-bottom: 12px;
+    }
+    
+    /* Buttons full width on mobile */
+    .btn-group-mobile .btn {
+        width: 100%;
+        margin-bottom: 8px;
+    }
+    
+    /* Hide some elements on very small screens */
+    .hide-on-mobile {
+        display: none !important;
+    }
+    
+    /* Show mobile menu button */
+    .mobile-menu-btn {
+        display: flex !important;
+    }
+    
+    /* Pagination compact */
+    .pagination {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .pagination .page-link {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    /* Alert cards compact */
+    .alert-item {
+        padding: 12px;
+    }
+    
+    .alert-item .alert-time {
+        display: none;
+    }
+    
+    /* Device cards */
+    .device-card {
+        padding: 16px;
+    }
+    
+    .device-card .device-stats {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    /* Screen dashboard */
+    .screen-dashboard {
+        padding: 10px;
+    }
+    
+    .screen-card {
+        min-height: 150px;
+    }
+    
+    .screen-value {
+        font-size: 1.5rem !important;
+    }
+}
+
+/* ---- Small devices (landscape phones) ---- */
+@media screen and (min-width: 576px) and (max-width: 767.98px) {
+    .sidebar {
+        position: fixed;
+        left: -280px;
+        z-index: 1050;
+        transition: left 0.3s ease;
+    }
+    
+    .sidebar.active {
+        left: 0;
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .card-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .hide-on-tablet {
+        display: none !important;
+    }
+}
+
+/* ---- Medium devices (tablets) ---- */
+@media screen and (min-width: 768px) and (max-width: 991.98px) {
+    .sidebar {
+        width: 220px;
+    }
+    
+    .sidebar .nav-text,
+    .sidebar .logo-text {
+        font-size: 13px;
+    }
+    
+    .sidebar .sidebar-header {
+        padding: 16px 12px;
+    }
+    
+    .main-content {
+        margin-left: 220px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .card-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    
+    .hide-on-tablet {
+        display: none !important;
+    }
+}
+
+/* ---- Large devices (desktops) ---- */
+@media screen and (min-width: 992px) and (max-width: 1199.98px) {
+    .stats-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+    
+    .card-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+/* ---- Extra large devices ---- */
+@media screen and (min-width: 1400px) {
+    .container-fluid {
+        max-width: 1600px;
+        margin: 0 auto;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* ---- Touch Device Optimizations ---- */
+@media (hover: none) and (pointer: coarse) {
+    /* Larger touch targets */
+    .btn {
+        min-height: 44px;
+        padding: 10px 20px;
+    }
+    
+    .nav-item {
+        min-height: 44px;
+    }
+    
+    .table td, .table th {
+        padding: 12px 8px;
+    }
+    
+    /* Remove hover effects that don't work well on touch */
+    .card:hover {
+        transform: none;
+    }
+    
+    .nav-item:hover {
+        background-color: transparent;
+    }
+    
+    .nav-item.active {
+        background-color: var(--primary-light);
+    }
+}
+
+/* ---- Print Styles ---- */
+@media print {
+    .sidebar,
+    .topbar,
+    .mobile-menu-btn,
+    .overlay {
+        display: none !important;
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+        padding: 20px;
+    }
+    
+    .card {
+        border: 1px solid #ddd;
+        box-shadow: none;
+        break-inside: avoid;
+    }
+    
+    .no-print {
+        display: none !important;
+    }
+}
+
+/* ---- Dark Mode Media Query Fallback ---- */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-card: #1e293b;
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --border-color: #334155;
+        --primary: #3b82f6;
+        --primary-light: rgba(59, 130, 246, 0.15);
+    }
+}
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ---- High Contrast Mode ---- */
+@media (prefers-contrast: high) {
+    :root {
+        --border-color: #000;
+        --text-primary: #000;
+        --bg-primary: #fff;
+        --bg-card: #fff;
+    }
+    
+    .card {
+        border: 2px solid #000;
+    }
+    
+    .btn {
+        border: 2px solid currentColor;
+    }
+}
+
+/* ---- Landscape orientation fixes for mobile ---- */
+@media screen and (max-width: 767.98px) and (orientation: landscape) {
+    .login-container {
+        padding: 20px;
+    }
+    
+    .login-card {
+        max-width: 400px;
+    }
+    
+    .screen-dashboard {
+        padding: 5px;
+    }
+    
+    .screen-card {
+        min-height: 100px;
+    }
+}

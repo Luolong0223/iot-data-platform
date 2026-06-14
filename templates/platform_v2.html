@@ -1,0 +1,298 @@
+{% extends "base_v2.html" %}
+
+{% block title %}平台管理 - IoT数据平台{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <!-- 页面头部 -->
+    <div class="page-header">
+        <div class="page-title-section">
+            <h1 class="page-title">平台管理</h1>
+            <p class="page-subtitle">设备影子、标签、命令、协议、通知、审计等高级功能</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-outline btn-sm" onclick="refreshAll()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/><path d="M21 3v5h-5"/></svg>
+                刷新全部
+            </button>
+        </div>
+    </div>
+
+    <!-- 标签页导航 -->
+    <div class="tabs-container">
+        <div class="tabs-nav" id="platformTabs">
+            <button class="tab-btn active" data-tab="shadow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 8v8m-4-4h8"/></svg>
+                设备影子
+            </button>
+            <button class="tab-btn" data-tab="tags">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                设备标签
+            </button>
+            <button class="tab-btn" data-tab="commands">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                命令中心
+            </button>
+            <button class="tab-btn" data-tab="protocol">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                协议适配器
+            </button>
+            <button class="tab-btn" data-tab="notifications">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                通知配置
+            </button>
+            <button class="tab-btn" data-tab="audit">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                审计日志
+            </button>
+        </div>
+
+        <!-- 设备影子 -->
+        <div class="tab-content active" id="tab-shadow">
+            <div class="card">
+                <div class="card-header">
+                    <h3>设备影子列表</h3>
+                    <div class="card-actions">
+                        <select id="shadowDeviceFilter" class="form-select form-select-sm">
+                            <option value="">所有设备</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="refreshShadows()">刷新</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>设备名称</th>
+                                <th>状态</th>
+                                <th>期望值</th>
+                                <th>报告值</th>
+                                <th>版本</th>
+                                <th>更新时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="shadowTableBody">
+                            <tr><td colspan="7" class="text-center">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设备标签 -->
+        <div class="tab-content" id="tab-tags">
+            <div class="card">
+                <div class="card-header">
+                    <h3>标签管理</h3>
+                    <div class="card-actions">
+                        <button class="btn btn-primary btn-sm" onclick="showAddTagModal()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            新建标签
+                        </button>
+                    </div>
+                </div>
+                <div class="tags-grid" id="tagsGrid">
+                    <!-- 动态加载 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 命令中心 -->
+        <div class="tab-content" id="tab-commands">
+            <div class="card">
+                <div class="card-header">
+                    <h3>命令列表</h3>
+                    <div class="card-actions">
+                        <select id="commandStatusFilter" class="form-select form-select-sm">
+                            <option value="">全部状态</option>
+                            <option value="pending">待发送</option>
+                            <option value="sent">已发送</option>
+                            <option value="executing">执行中</option>
+                            <option value="success">成功</option>
+                            <option value="failed">失败</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="showSendCommandModal()">发送命令</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>目标设备</th>
+                                <th>命令类型</th>
+                                <th>参数</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="commandTableBody">
+                            <tr><td colspan="7" class="text-center">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 协议适配器 -->
+        <div class="tab-content" id="tab-protocol">
+            <div class="card">
+                <div class="card-header">
+                    <h3>协议适配器</h3>
+                    <div class="card-actions">
+                        <button class="btn btn-primary btn-sm" onclick="showAddProtocolModal()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            添加适配器
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4" id="protocolGrid">
+                    <!-- 动态加载 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 通知配置 -->
+        <div class="tab-content" id="tab-notifications">
+            <div class="card">
+                <div class="card-header">
+                    <h3>通知配置</h3>
+                </div>
+                <div class="notification-config">
+                    <div class="config-item">
+                        <div class="config-icon email">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        </div>
+                        <div class="config-info">
+                            <h4>邮件通知</h4>
+                            <p>通过邮件接收告警和系统通知</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="emailNotify" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="config-item">
+                        <div class="config-icon webhook">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                        </div>
+                        <div class="config-info">
+                            <h4>Webhook</h4>
+                            <p>向指定URL推送实时事件数据</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="webhookNotify">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="config-item">
+                        <div class="config-icon browser">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+                        </div>
+                        <div class="config-info">
+                            <h4>浏览器通知</h4>
+                            <p>在浏览器中显示实时告警弹窗</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="browserNotify" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 通知历史 -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3>最近通知记录</h3>
+                    <button class="btn btn-sm btn-outline" onclick="loadNotifications()">刷新</button>
+                </div>
+                <div class="timeline" id="notificationTimeline">
+                    <div class="timeline-empty">暂无通知记录</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 审计日志 -->
+        <div class="tab-content" id="tab-audit">
+            <div class="card">
+                <div class="card-header">
+                    <h3>操作日志</h3>
+                    <div class="card-actions">
+                        <input type="date" class="form-input form-input-sm" id="auditDateFrom" placeholder="开始日期">
+                        <input type="date" class="form-input form-input-sm" id="auditDateTo" placeholder="结束日期">
+                        <select class="form-select form-select-sm" id="auditActionType">
+                            <option value="">全部类型</option>
+                            <option value="login">登录</option>
+                            <option value="create">创建</option>
+                            <option value="update">更新</option>
+                            <option value="delete">删除</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="searchAuditLogs()">查询</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>用户</th>
+                                <th>操作类型</th>
+                                <th>资源</th>
+                                <th>详情</th>
+                                <th>IP地址</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody">
+                            <tr><td colspan="6" class="text-center">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination-wrapper" id="auditPagination"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 发送命令模态框 -->
+<div class="modal-overlay" id="commandModal">
+    <div class="modal modal-md">
+        <div class="modal-header">
+            <h3>发送命令</h3>
+            <button class="modal-close" onclick="closeModal('commandModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>目标设备</label>
+                <select class="form-select" id="cmdDeviceId">
+                    <option value="">选择设备</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>命令类型</label>
+                <select class="form-select" id="cmdType">
+                    <option value="reboot">重启设备</option>
+                    <option value="config_update">配置更新</option>
+                    <option value="data_request">请求数据</option>
+                    <option value="firmware_update">固件升级</option>
+                    <option value="custom">自定义命令</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>命令参数 (JSON)</label>
+                <textarea class="form-textarea" id="cmdPayload" rows="4" placeholder='{"key": "value"}'></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('commandModal')">取消</button>
+            <button class="btn btn-primary" onclick="sendCommand()">发送</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/v2/platform.js') }}"></script>
+{% endblock %}
