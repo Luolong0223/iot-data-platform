@@ -62,51 +62,55 @@ def detailed_health():
 def system_metrics():
     """
     系统指标接口
-    返回系统资源和应用统计数据
+    返回系统资源和应用统计数据（应用统计走缓存 30s）
     """
-    # 系统资源指标
-    cpu_percent = psutil.cpu_percent(interval=1)
-    memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
-    
-    # 应用统计
-    try:
-        total_users = User.query.count()
-        total_devices = Device.query.count()
-        total_data_points = DataPoint.query.count()
-        unread_alarms = AlarmRecord.query.filter_by(is_read=False).count()
-        today_logs = TcpLog.query.filter(
-            TcpLog.received_at >= datetime.utcnow().replace(hour=0, minute=0, second=0)
-        ).count()
-    except Exception:
-        total_users = total_devices = total_data_points = unread_alarms = today_logs = 0
-    
-    return jsonify({
-        'timestamp': datetime.utcnow().isoformat(),
-        'system': {
-            'platform': platform.platform(),
-            'python_version': platform.python_version(),
-            'cpu_percent': cpu_percent,
-            'memory': {
-                'total': memory.total,
-                'available': memory.available,
-                'percent': memory.percent,
-                'used': memory.used
-            },
-            'disk': {
-                'total': disk.total,
-                'used': disk.used,
-                'free': disk.free,
-                'percent': disk.percent
-            }
-        },
-        'application': {
+    from services.cache import get_cache, make_key, cached
+    cache = get_cache()
+    app_stats = cache.get(make_key('app_stats'))
+    if not app_stats:
+        try:
+            total_users = User.query.count()
+            total_devices = Device.query.count()
+            total_data_points = DataPoint.query.count()
+            unread_alarms = AlarmRecord.query.filter_by(is_read=False).count()
+            today_logs = TcpLog.query.filter(
+                TcpLog.received_at >= datetime.utcnow().replace(hour=0, minute=0, second=0)
+            ).count()
+        except Exception:
+            total_users = total_devices = total_data_points = unread_alarms = today_logs = 0
+        app_stats = {
             'total_users': total_users,
             'total_devices': total_devices,
             'total_data_points': total_data_points,
             'unread_alarms': unread_alarms,
-            'today_tcp_logs': today_logs
+            'today_tcp_logs': today_logs,
         }
+        try:
+            cache.set(make_key('app_stats'), app_stats, ttl=30)
+        except Exception:
+            pass
+    
+    return jsonify({
+        'timestamp': datetime.utcnow().isoformat(),
+        'cache': cache.stats(),
+        'system': {
+            'platform': platform.platform(),
+            'python_version': platform.python_version(),
+            'cpu_percent': psutil.cpu_percent(interval=None),
+            'memory': {
+                'total': psutil.virtual_memory().total,
+                'available': psutil.virtual_memory().available,
+                'percent': psutil.virtual_memory().percent,
+                'used': psutil.virtual_memory().used
+            },
+            'disk': {
+                'total': psutil.disk_usage('/').total,
+                'used': psutil.disk_usage('/').used,
+                'free': psutil.disk_usage('/').free,
+                'percent': psutil.disk_usage('/').percent
+            }
+        },
+        'application': app_stats
     })
 
 

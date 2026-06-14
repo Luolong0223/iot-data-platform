@@ -139,6 +139,10 @@ def create_app(config_name=None):
         except Exception as e:
             print(f'[RBAC] init warning: {e}')
 
+    # 初始化缓存后端（内存 / Redis）
+    from services.cache import init_cache
+    init_cache(app)
+
     # 自动启动 TCP 服务器（无论通过 run.py 还是 wsgi.py 入口）
     _start_tcp_server_once(app)
 

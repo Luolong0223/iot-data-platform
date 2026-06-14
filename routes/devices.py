@@ -11,8 +11,19 @@ devices_bp = Blueprint('devices', __name__, url_prefix='/api/devices')
 @devices_bp.route('', methods=['GET'])
 @login_required
 def list_devices():
+    from services.cache import get_cache, make_key
+    cache = get_cache()
+    cache_key = make_key('devices_list', current_user.id)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return jsonify({'success': True, 'devices': cached, '_cached': True})
     devices = Device.query.filter_by(user_id=current_user.id).all()
-    return jsonify({'success': True, 'devices': [d.to_dict() for d in devices]})
+    result = [d.to_dict() for d in devices]
+    try:
+        cache.set(cache_key, result, ttl=20)
+    except Exception:
+        pass
+    return jsonify({'success': True, 'devices': result})
 
 
 @devices_bp.route('', methods=['POST'])
@@ -37,6 +48,10 @@ def create_device():
     )
     db.session.add(device)
     db.session.commit()
+
+    # 失效设备列表缓存
+    from services.cache import invalidate, make_key
+    invalidate(make_key('devices_list', current_user.id) + '*')
 
     return jsonify({'success': True, 'device': device.to_dict()}), 201
 
@@ -64,6 +79,8 @@ def update_device(device_id):
         device.voltage_mv = data['voltage_mv']
 
     db.session.commit()
+    from services.cache import invalidate, make_key
+    invalidate(make_key('devices_list', current_user.id) + '*')
     return jsonify({'success': True, 'device': device.to_dict()})
 
 
@@ -76,6 +93,8 @@ def delete_device(device_id):
 
     db.session.delete(device)
     db.session.commit()
+    from services.cache import invalidate, make_key
+    invalidate(make_key('devices_list', current_user.id) + '*')
     return jsonify({'success': True, 'message': 'Device deleted'})
 
 
