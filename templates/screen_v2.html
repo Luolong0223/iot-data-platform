@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/v2/screen.css') }}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
 <style>
     /* 大屏模式覆盖 */
     .app-wrapper { height: 100vh; overflow: hidden; }
@@ -12,6 +13,10 @@
     .topbar { display: none !important; }
     .page-content { padding: 0 !important; height: 100vh; }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 {% endblock %}
 
 {% block content %}
