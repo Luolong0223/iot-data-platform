@@ -788,3 +788,118 @@ class UserRole(db.Model):
 
     user = db.relationship('User', backref='user_roles')
     role = db.relationship('Role', backref='user_roles')
+
+
+# ========================================================================
+# OTA 固件升级
+# ========================================================================
+
+class Firmware(db.Model):
+    """固件包"""
+    __tablename__ = 'firmwares'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    version = db.Column(db.String(64), nullable=False)
+    hardware_model = db.Column(db.String(64), nullable=True, index=True)
+    file_path = db.Column(db.String(512), nullable=False)  # 相对于 instance/firmwares/ 或绝对路径
+    file_size = db.Column(db.BigInteger, default=0)
+    checksum = db.Column(db.String(128), nullable=True)  # md5/sha256
+    description = db.Column(db.String(500), nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    user = db.relationship('User', backref='firmwares')
+    tasks = db.relationship('OtaTask', backref='firmware', cascade='all, delete-orphan', lazy='dynamic')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'version': self.version,
+            'hardware_model': self.hardware_model,
+            'file_path': self.file_path,
+            'file_size': self.file_size,
+            'checksum': self.checksum,
+            'description': self.description,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class OtaTask(db.Model):
+    """OTA 升级任务"""
+    __tablename__ = 'ota_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    firmware_id = db.Column(db.Integer, db.ForeignKey('firmwares.id'), nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    # 目标选择
+    target_type = db.Column(db.String(16), default='all', nullable=False)  # all/group/device
+    target_ids = db.Column(db.Text, nullable=True)  # JSON 数组，按 target_type 解释
+    # 状态
+    status = db.Column(db.String(16), default='pending', nullable=False, index=True)  # pending/running/completed/failed/cancelled
+    upgrade_mode = db.Column(db.String(16), default='silent', nullable=False)  # silent/force/manual
+    scheduled_at = db.Column(db.DateTime, nullable=True)  # 计划执行时间
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+    # 统计
+    total = db.Column(db.Integer, default=0)
+    success = db.Column(db.Integer, default=0)
+    failed = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='ota_tasks')
+    device_tasks = db.relationship('OtaDeviceTask', backref='task', cascade='all, delete-orphan', lazy='dynamic')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'firmware_id': self.firmware_id,
+            'firmware_name': self.firmware.name if self.firmware else None,
+            'firmware_version': self.firmware.version if self.firmware else None,
+            'name': self.name,
+            'target_type': self.target_type,
+            'target_ids': _json.loads(self.target_ids) if self.target_ids else None,
+            'status': self.status,
+            'upgrade_mode': self.upgrade_mode,
+            'scheduled_at': self.scheduled_at.isoformat() if self.scheduled_at else None,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'finished_at': self.finished_at.isoformat() if self.finished_at else None,
+            'total': self.total,
+            'success': self.success,
+            'failed': self.failed,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class OtaDeviceTask(db.Model):
+    """OTA 单设备升级进度"""
+    __tablename__ = 'ota_device_tasks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('ota_tasks.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.Integer, nullable=False, index=True)
+    device_name = db.Column(db.String(128), nullable=True)
+    status = db.Column(db.String(16), default='pending', nullable=False, index=True)  # pending/downloading/installing/success/failed
+    progress = db.Column(db.Integer, default=0)  # 0-100
+    error_message = db.Column(db.String(500), nullable=True)
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'task_id': self.task_id,
+            'device_id': self.device_id,
+            'device_name': self.device_name,
+            'status': self.status,
+            'progress': self.progress,
+            'error_message': self.error_message,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'finished_at': self.finished_at.isoformat() if self.finished_at else None,
+        }

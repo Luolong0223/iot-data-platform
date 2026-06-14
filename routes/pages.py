@@ -111,6 +111,13 @@ def rbac():
     return render_template('rbac.html')
 
 
+@pages_bp.route('/ota')
+@login_required
+def ota():
+    """OTA 固件升级管理"""
+    return render_template('ota.html')
+
+
 @pages_bp.route('/admin')
 @login_required
 def admin():

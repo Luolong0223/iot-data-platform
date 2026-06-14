@@ -73,6 +73,11 @@
                             <i class="bi bi-shield-lock"></i> 角色权限
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.ota' %}active{% endif %}" href="{{ url_for('pages.ota') }}">
+                            <i class="bi bi-cloud-arrow-up"></i> OTA 升级
+                        </a>
+                    </li>
                     {% if current_user.is_authenticated and current_user.is_admin %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">

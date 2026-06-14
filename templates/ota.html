@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}OTA 固件升级 · IoT 平台{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0"><i class="bi bi-cloud-arrow-up"></i> OTA 固件升级</h3>
+    <div>
+      <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#firmwareModal" onclick="openFirmwareModal()">
+        <i class="bi bi-upload"></i> 上传固件
+      </button>
+      <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#taskModal" onclick="openTaskModal()">
+        <i class="bi bi-plus-circle"></i> 创建升级任务
+      </button>
+    </div>
+  </div>
+
+  <ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tasksPane"><i class="bi bi-list-task"></i> 升级任务</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#firmwaresPane"><i class="bi bi-archive"></i> 固件包</button></li>
+  </ul>
+
+  <div class="tab-content">
+    <div class="tab-pane fade show active" id="tasksPane">
+      <div class="card"><div class="card-body">
+        <table class="table table-sm table-hover">
+          <thead>
+            <tr><th>ID</th><th>名称</th><th>固件</th><th>目标</th><th>模式</th><th>进度</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+          </thead>
+          <tbody id="taskTbody"><tr><td colspan="9" class="text-muted text-center py-3">加载中...</td></tr></tbody>
+        </table>
+      </div></div>
+    </div>
+    <div class="tab-pane fade" id="firmwaresPane">
+      <div class="card"><div class="card-body">
+        <table class="table table-sm table-hover">
+          <thead>
+            <tr><th>ID</th><th>名称</th><th>版本</th><th>硬件型号</th><th>大小</th><th>MD5</th><th>创建时间</th><th>操作</th></tr>
+          </thead>
+          <tbody id="fwTbody"><tr><td colspan="8" class="text-muted text-center py-3">加载中...</td></tr></tbody>
+        </table>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 固件上传 -->
+<div class="modal fade" id="firmwareModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">上传固件</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form id="firmwareForm" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="mb-2"><label class="form-label">固件名称 *</label><input class="form-control" name="name" required></div>
+          <div class="mb-2"><label class="form-label">版本号 *</label><input class="form-control" name="version" placeholder="v1.2.3" required></div>
+          <div class="mb-2"><label class="form-label">硬件型号</label><input class="form-control" name="hardware_model" placeholder="ESP32 / STM32 ..."></div>
+          <div class="mb-2"><label class="form-label">描述</label><textarea class="form-control" name="description" rows="2"></textarea></div>
+          <div class="mb-2"><label class="form-label">固件文件 *</label><input type="file" class="form-control" name="file" accept=".bin,.hex,.zip,.fw" required></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">上传</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 创建任务 -->
+<div class="modal fade" id="taskModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">创建升级任务</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="taskForm">
+          <div class="row g-2 mb-2">
+            <div class="col-md-6"><label class="form-label">任务名称 *</label><input class="form-control" name="name" required></div>
+            <div class="col-md-6"><label class="form-label">固件 *</label><select class="form-select" name="firmware_id" id="fwSelect" required></select></div>
+            <div class="col-md-4">
+              <label class="form-label">目标类型</label>
+              <select class="form-select" name="target_type" id="targetType">
+                <option value="all">全部设备</option>
+                <option value="device">指定设备</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">升级模式</label>
+              <select class="form-select" name="upgrade_mode">
+                <option value="silent">静默升级</option>
+                <option value="force">强制升级</option>
+                <option value="manual">手动确认</option>
+              </select>
+            </div>
+            <div class="col-md-4" id="targetIdsBox" style="display:none">
+              <label class="form-label">设备 ID（逗号分隔）</label>
+              <input class="form-control" name="target_ids" placeholder="1,2,3">
+            </div>
+            <div class="col-12"><label class="form-label">计划执行时间（可选）</label><input class="form-control" name="scheduled_at" placeholder="2026-06-15T10:00:00"></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-primary" onclick="submitTask()">创建</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 任务详情 -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="detailTitle">任务详情</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function api(path, opts={}) {
+  const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}, credentials:'same-origin'}, opts));
+  const j = await r.json();
+  if (!r.ok || j.success === false) throw new Error(j.msg || ('HTTP '+r.status));
+  return j.data;
+}
+
+const SEV = {pending:'secondary',running:'primary',completed:'success',failed:'danger',cancelled:'warning',partial:'warning',success:'success',downloading:'info',installing:'info'};
+
+async function loadTasks() {
+  const tb = document.getElementById('taskTbody');
+  try {
+    const tasks = await api('/api/ota/tasks');
+    if (!tasks.length) { tb.innerHTML = '<tr><td colspan="9" class="text-muted text-center py-3">暂无任务</td></tr>'; return; }
+    tb.innerHTML = tasks.map(t => `
+      <tr>
+        <td>${t.id}</td>
+        <td>${t.name}</td>
+        <td>${t.firmware_name||''} <span class="badge bg-light text-dark">${t.firmware_version||''}</span></td>
+        <td>${t.target_type} ${t.target_ids?'('+(t.target_ids||[]).length+')':''}</td>
+        <td>${t.upgrade_mode}</td>
+        <td>
+          <div class="progress" style="height:18px;min-width:120px">
+            <div class="progress-bar" role="progressbar" style="width:${t.total?Math.round((t.success+t.failed)/t.total*100):0}%">
+              ${t.success}/${t.total}
+            </div>
+          </div>
+        </td>
+        <td><span class="badge bg-${SEV[t.status]||'secondary'}">${t.status}</span></td>
+        <td class="small text-muted">${(t.created_at||'').slice(0,16)}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary" onclick="viewTask(${t.id})">详情</button>
+          ${t.status==='pending'?`<button class="btn btn-sm btn-outline-success" onclick="startTask(${t.id})">启动</button>`:''}
+          ${t.status==='running'?`<button class="btn btn-sm btn-outline-warning" onclick="cancelTask(${t.id})">取消</button>`:''}
+        </td>
+      </tr>
+    `).join('');
+  } catch(e) { tb.innerHTML = '<tr><td colspan="9" class="text-danger text-center py-3">'+e.message+'</td></tr>'; }
+}
+
+async function loadFirmwares() {
+  const tb = document.getElementById('fwTbody');
+  try {
+    const fws = await api('/api/ota/firmwares');
+    if (!fws.length) { tb.innerHTML = '<tr><td colspan="8" class="text-muted text-center py-3">暂无固件</td></tr>'; return; }
+    tb.innerHTML = fws.map(f => `
+      <tr>
+        <td>${f.id}</td>
+        <td>${f.name}</td>
+        <td><span class="badge bg-info">${f.version}</span></td>
+        <td>${f.hardware_model||'<span class="text-muted">通用</span>'}</td>
+        <td>${(f.file_size/1024).toFixed(1)} KB</td>
+        <td class="small text-muted">${(f.checksum||'').slice(0,12)}...</td>
+        <td class="small text-muted">${(f.created_at||'').slice(0,16)}</td>
+        <td>
+          <a class="btn btn-sm btn-outline-primary" href="/api/ota/firmwares/${f.id}/download"><i class="bi bi-download"></i></a>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteFirmware(${f.id},'${f.name}')"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>
+    `).join('');
+  } catch(e) { tb.innerHTML = '<tr><td colspan="8" class="text-danger text-center py-3">'+e.message+'</td></tr>'; }
+}
+
+async function openFirmwareModal() {
+  document.getElementById('firmwareForm').reset();
+}
+document.getElementById('firmwareForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  try {
+    const r = await fetch('/api/ota/firmwares', {method:'POST', body:fd, credentials:'same-origin'});
+    const j = await r.json();
+    if (!r.ok || !j.success) throw new Error(j.msg || '上传失败');
+    bootstrap.Modal.getInstance(document.getElementById('firmwareModal')).hide();
+    loadFirmwares();
+  } catch(err) { alert(err.message); }
+});
+
+document.getElementById('targetType').addEventListener('change', (e)=>{
+  document.getElementById('targetIdsBox').style.display = e.target.value === 'device' ? '' : 'none';
+});
+
+async function openTaskModal() {
+  document.getElementById('taskForm').reset();
+  document.getElementById('targetIdsBox').style.display = 'none';
+  const fws = await api('/api/ota/firmwares');
+  document.getElementById('fwSelect').innerHTML = '<option value="">-- 请选择 --</option>' +
+    fws.map(f => `<option value="${f.id}">${f.name} v${f.version}</option>`).join('');
+}
+async function submitTask() {
+  const f = document.getElementById('taskForm');
+  const data = Object.fromEntries(new FormData(f).entries());
+  data.firmware_id = parseInt(data.firmware_id);
+  if (data.target_type === 'device' && data.target_ids) {
+    data.target_ids = data.target_ids.split(',').map(s=>parseInt(s.trim())).filter(Boolean);
+  } else if (data.target_type === 'all') {
+    data.target_ids = [];
+  } else {
+    data.target_ids = [];
+  }
+  if (!data.scheduled_at) delete data.scheduled_at;
+  try {
+    await api('/api/ota/tasks', {method:'POST', body:JSON.stringify(data)});
+    bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();
+    loadTasks();
+  } catch(e) { alert('创建失败: '+e.message); }
+}
+
+async function startTask(id) {
+  if (!confirm('确认启动任务？')) return;
+  try { await api('/api/ota/tasks/'+id+'/start', {method:'POST'}); loadTasks(); }
+  catch(e) { alert(e.message); }
+}
+async function cancelTask(id) {
+  if (!confirm('确认取消任务？')) return;
+  try { await api('/api/ota/tasks/'+id+'/cancel', {method:'POST'}); loadTasks(); }
+  catch(e) { alert(e.message); }
+}
+async function deleteFirmware(id, name) {
+  if (!confirm('确认删除固件「'+name+'」？')) return;
+  try { await api('/api/ota/firmwares/'+id, {method:'DELETE'}); loadFirmwares(); }
+  catch(e) { alert(e.message); }
+}
+async function viewTask(id) {
+  try {
+    const t = await api('/api/ota/tasks/'+id);
+    document.getElementById('detailTitle').textContent = '任务 #'+t.id+' - '+t.name;
+    let html = `
+      <div class="row g-2 mb-3 small">
+        <div class="col-md-3"><strong>固件：</strong>${t.firmware_name} v${t.firmware_version}</div>
+        <div class="col-md-3"><strong>目标：</strong>${t.target_type} (${t.total} 台)</div>
+        <div class="col-md-3"><strong>模式：</strong>${t.upgrade_mode}</div>
+        <div class="col-md-3"><strong>状态：</strong><span class="badge bg-${SEV[t.status]||'secondary'}">${t.status}</span></div>
+        <div class="col-md-3"><strong>成功：</strong><span class="text-success">${t.success}</span></div>
+        <div class="col-md-3"><strong>失败：</strong><span class="text-danger">${t.failed}</span></div>
+        <div class="col-md-3"><strong>开始：</strong>${(t.started_at||'').slice(0,16)||'未启动'}</div>
+        <div class="col-md-3"><strong>完成：</strong>${(t.finished_at||'').slice(0,16)||'未完成'}</div>
+      </div>
+      <h6>设备升级进度</h6>
+      <table class="table table-sm">
+        <thead><tr><th>设备ID</th><th>设备名</th><th>状态</th><th>进度</th><th>开始</th><th>完成</th><th>错误</th><th>操作</th></tr></thead>
+        <tbody>
+          ${t.devices.map(d => `
+            <tr>
+              <td>${d.device_id}</td>
+              <td>${d.device_name||''}</td>
+              <td><span class="badge bg-${SEV[d.status]||'secondary'}">${d.status}</span></td>
+              <td>
+                <div class="progress" style="height:14px;min-width:100px">
+                  <div class="progress-bar" style="width:${d.progress||0}%">${d.progress||0}%</div>
+                </div>
+              </td>
+              <td class="small text-muted">${(d.started_at||'').slice(11,19)||'-'}</td>
+              <td class="small text-muted">${(d.finished_at||'').slice(11,19)||'-'}</td>
+              <td class="small text-danger">${d.error_message||''}</td>
+              <td>${d.status==='pending'||d.status==='downloading'||d.status==='installing'?`<button class="btn btn-sm btn-outline-success" onclick="simulateProgress(${t.id},${d.device_id})">模拟+20%</button>`:''}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    document.getElementById('detailBody').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+  } catch(e) { alert(e.message); }
+}
+async function simulateProgress(taskId, deviceId) {
+  // 模拟：依次 downloading -> installing -> success
+  try {
+    await api('/api/ota/tasks/'+taskId+'/devices/'+deviceId+'/progress', {method:'POST', body:JSON.stringify({status:'downloading', progress:33})});
+    setTimeout(async () => {
+      await api('/api/ota/tasks/'+taskId+'/devices/'+deviceId+'/progress', {method:'POST', body:JSON.stringify({status:'installing', progress:66})});
+      setTimeout(async () => {
+        await api('/api/ota/tasks/'+taskId+'/devices/'+deviceId+'/progress', {method:'POST', body:JSON.stringify({status:'success', progress:100})});
+        viewTask(taskId); loadTasks();
+      }, 300);
+    }, 300);
+  } catch(e) { alert(e.message); }
+}
+
+document.addEventListener('DOMContentLoaded', () => { loadTasks(); loadFirmwares(); });
+</script>
+{% endblock %}
