@@ -150,3 +150,21 @@ def swagger_ui():
 def redoc_ui():
     """ReDoc API 文档"""
     return render_template('redoc.html')
+
+
+@pages_bp.route('/visualization/topology')
+@login_required
+def viz_topology():
+    return render_template('visualization/topology.html')
+
+
+@pages_bp.route('/visualization/heatmap')
+@login_required
+def viz_heatmap():
+    return render_template('visualization/heatmap.html')
+
+
+@pages_bp.route('/visualization/map')
+@login_required
+def viz_map():
+    return render_template('visualization/gis_map.html')

@@ -115,6 +115,8 @@ def create_app(config_name=None):
     app.register_blueprint(alarm_rules_bp)
     app.register_blueprint(screen_bp)
     app.register_blueprint(platform_bp)
+    from routes.visualization import viz_bp as visualization_bp
+    app.register_blueprint(visualization_bp)
     app.register_blueprint(docs_bp)
 
     with app.app_context():

@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}设备拓扑图 - IoT 数据平台{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>设备拓扑图</h4>
+        <div class="btn-group">
+            <button class="btn btn-outline-primary btn-sm" onclick="loadTopology()">
+                <i class="bi bi-arrow-clockwise me-1"></i>刷新
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleLayout()">
+                <i class="bi bi-grid-3x3 me-1"></i>切换布局
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card glass-card">
+                <div class="card-body">
+                    <div class="text-muted small">设备总数</div>
+                    <div class="h3 mb-0" id="statTotal">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card glass-card">
+                <div class="card-body">
+                    <div class="text-muted small">在线设备</div>
+                    <div class="h3 mb-0 text-success" id="statOnline">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card glass-card">
+                <div class="card-body">
+                    <div class="text-muted small">分组数量</div>
+                    <div class="h3 mb-0" id="statGroups">-</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card glass-card">
+                <div class="card-body">
+                    <div class="text-muted small">通道数量</div>
+                    <div class="h3 mb-0 text-warning" id="statChannels">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card glass-card">
+        <div class="card-body p-0">
+            <div id="topologyChart" style="width: 100%; height: 70vh; min-height: 500px;"></div>
+        </div>
+    </div>
+
+    <div class="mt-3 small text-muted">
+        <strong>图例：</strong>
+        <span class="badge bg-secondary me-2">根节点</span>
+        <span class="badge bg-success me-2">分组</span>
+        <span class="badge bg-primary me-2">设备(在线)</span>
+        <span class="badge bg-danger me-2">设备(离线)</span>
+        <span class="badge bg-warning text-dark me-2">通道</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+let chart;
+let currentLayout = 'force';
+
+function initChart() {
+    chart = echarts.init(document.getElementById('topologyChart'));
+    window.addEventListener('resize', () => chart.resize());
+}
+
+function loadTopology() {
+    fetch('/api/viz/api/topology').then(r => r.json()).then(res => {
+        if (!res.success) return;
+        renderTopology(res.data);
+        updateStats(res.data);
+    });
+}
+
+function updateStats(data) {
+    document.getElementById('statTotal').textContent =
+        data.nodes.filter(n => n.type === 'device').length;
+    document.getElementById('statOnline').textContent =
+        data.nodes.filter(n => n.type === 'device' && n.is_online).length;
+    document.getElementById('statGroups').textContent =
+        data.nodes.filter(n => n.type === 'group').length;
+    document.getElementById('statChannels').textContent =
+        data.nodes.filter(n => n.type === 'channel').length;
+}
+
+function renderTopology(data) {
+    let layoutOption;
+    if (currentLayout === 'force') {
+        layoutOption = {
+            type: 'force',
+            force: { repulsion: 200, edgeLength: 80, gravity: 0.05 },
+            preventOverlap: true
+        };
+    } else {
+        layoutOption = { type: 'circular' };
+    }
+
+    chart.setOption({
+        tooltip: {
+            formatter: function(p) {
+                if (p.dataType === 'edge') return `${p.data.source} → ${p.data.target}`;
+                return `<b>${p.data.label}</b><br/>类型: ${p.data.type}<br/>` +
+                       (p.data.is_online !== undefined ? `在线: ${p.data.is_online ? '是' : '否'}` : '');
+            }
+        },
+        legend: [{
+            data: data.categories.map(c => c.name),
+            orient: 'vertical', x: 'right', y: 'center'
+        }],
+        animationDuration: 1500,
+        animationEasingUpdate: 'quinticInOut',
+        series: [{
+            type: 'graph',
+            layout: currentLayout,
+            force: currentLayout === 'force' ? { repulsion: 200, edgeLength: 80 } : undefined,
+            roam: true,
+            draggable: true,
+            data: data.nodes,
+            links: data.edges,
+            categories: data.categories,
+            lineStyle: { color: 'source', curveness: 0.1, width: 1.5 },
+            emphasis: { focus: 'adjacency', lineStyle: { width: 4 } },
+            label: { show: true, position: 'right', fontSize: 11 }
+        }]
+    });
+}
+
+function toggleLayout() {
+    currentLayout = currentLayout === 'force' ? 'circular' : 'force';
+    loadTopology();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initChart();
+    loadTopology();
+});
+</script>
+{% endblock %}
