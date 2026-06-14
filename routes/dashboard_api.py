@@ -173,6 +173,11 @@ def get_system_info():
                 'mem_percent': 0
             }
         })
+
+
+@dashboard_bp.route('/api/dashboard/trend')
+@login_required
+def get_trend():
     """获取数据趋势（24小时）"""
     from models.database import db, Device, SlaveChannel, DataPoint
     
@@ -459,7 +464,7 @@ def realtime_stream():
                 
                 import time
                 time.sleep(1)
-            except GeneratorError:
+            except GeneratorExit:
                 break
             except Exception as e:
                 current_app.logger.error(f"SSE错误: {e}")

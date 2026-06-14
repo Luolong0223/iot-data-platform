@@ -30,7 +30,6 @@ from routes.audit import audit_bp
 from routes.notifications import notifications_bp
 from routes.simulator import simulator_bp
 from routes.monitor import monitor_bp
-from routes.simulator import simulator_bp
 from routes.protocol import protocol_bp
 from routes.lifecycle import lifecycle_bp
 from routes.geofence import geofence_bp
