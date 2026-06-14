@@ -81,6 +81,27 @@ def create_app(config_name=None):
     # 创建数据库表
     with app.app_context():
         db.create_all()
+        # 自动迁移: 补全缺失列(防止生产 MySQL 与模型不同步)
+        try:
+            from migrate_db import EXPECTED_COLUMNS, get_existing_columns, get_all_tables, add_column
+            from sqlalchemy import inspect
+            with db.engine.connect() as conn:
+                existing_tables = get_all_tables(conn)
+                for table, columns in EXPECTED_COLUMNS.items():
+                    if table not in existing_tables:
+                        continue
+                    existing = get_existing_columns(conn, table)
+                    for col_name, col_def in columns:
+                        if col_name in existing:
+                            continue
+                        result = add_column(conn, table, col_name, col_def)
+                        if result is True:
+                            app.logger.info(f"[Migrate] Added column {table}.{col_name}")
+                        else:
+                            app.logger.warning(f"[Migrate] {table}.{col_name}: {result}")
+        except Exception as e:
+            app.logger.warning(f"[Migrate] 自动迁移失败(可忽略): {e}")
+
         # 启动 TCP 服务
         from services.tcp_listener import start_tcp_listener
         start_tcp_listener(app)

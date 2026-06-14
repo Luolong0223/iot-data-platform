@@ -79,6 +79,13 @@ def login():
     
     # 登录成功
     login_user(user, remember=data.get('remember', False))
+    # 更新最后登录时间
+    try:
+        from datetime import datetime
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+    except Exception:
+        pass
     
     # 更新最后登录信息
     user.last_login_at = datetime.now()
