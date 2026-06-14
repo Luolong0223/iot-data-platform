@@ -35,3 +35,5 @@ Flask-Mail==0.9.1
 
 # 安全增强（移除固定版本，让 pip 自动兼容系统已安装的包）
 # cryptography>=46.0.0
+flask-sock==0.7.0
+simple-websocket==1.1.0

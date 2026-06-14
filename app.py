@@ -149,6 +149,16 @@ def create_app(config_name=None):
     from services.cache import init_cache
     init_cache(app)
 
+    # 初始化 WebSocket 路由
+    try:
+        from flask_sock import Sock
+        sock = Sock(app)
+        from services.websocket import init_ws_routes
+        init_ws_routes(app, sock)
+        app.logger.info('[WS] WebSocket routes registered at /ws and /ws/stats')
+    except Exception as e:
+        app.logger.warning(f'[WS] init failed: {e}')
+
     # 自动启动 TCP 服务器（无论通过 run.py 还是 wsgi.py 入口）
     _start_tcp_server_once(app)
 
