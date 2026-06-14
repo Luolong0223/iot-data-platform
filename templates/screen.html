@@ -1056,5 +1056,14 @@ function refreshSelectedPointsUI() {
             '</span>';
     }).join('');
 }
+
+// ====== 页面初始化 ======
+document.addEventListener('DOMContentLoaded', function() {
+    initTrendChart();
+    loadDeviceSelector();
+    loadSavedPoints();
+    // 定期刷新选定数据
+    setInterval(loadSelectedData, 5000);
+});
 </script>
 {% endblock %}
