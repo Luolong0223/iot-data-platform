@@ -1824,3 +1824,104 @@ class QuotaUsage(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+# ========================================================================
+# 配置中心 (Configuration Center)
+# ========================================================================
+
+class DynamicConfig(db.Model):
+    """动态配置"""
+    __tablename__ = 'dynamic_configs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 配置键
+    config_key = db.Column(db.String(128), nullable=False, index=True)
+    
+    # 配置值 (JSON)
+    config_value = db.Column(db.Text, nullable=True)
+    
+    # 配置类型: string / number / boolean / json
+    value_type = db.Column(db.String(32), default='string', nullable=False)
+    
+    # 配置描述
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 配置分组
+    group_name = db.Column(db.String(64), default='default', nullable=False, index=True)
+    
+    # 是否启用
+    enabled = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    
+    # 版本号
+    version = db.Column(db.Integer, default=1, nullable=False)
+    
+    # 是否加密
+    encrypted = db.Column(db.Boolean, default=False, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now, index=True)
+
+    user = db.relationship('User', backref='dynamic_configs')
+    versions = db.relationship('ConfigVersion', backref='config', cascade='all, delete-orphan', lazy='dynamic')
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'config_key', name='uq_user_config_key'),
+    )
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'config_key': self.config_key,
+            'config_value': _json.loads(self.config_value) if self.config_value else None,
+            'value_type': self.value_type,
+            'description': self.description,
+            'group_name': self.group_name,
+            'enabled': self.enabled,
+            'version': self.version,
+            'encrypted': self.encrypted,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ConfigVersion(db.Model):
+    """配置版本历史"""
+    __tablename__ = 'config_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    config_id = db.Column(db.Integer, db.ForeignKey('dynamic_configs.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    # 版本号
+    version = db.Column(db.Integer, nullable=False, index=True)
+    
+    # 配置值 (JSON)
+    config_value = db.Column(db.Text, nullable=True)
+    
+    # 变更说明
+    change_note = db.Column(db.String(500), nullable=True)
+    
+    # 操作人
+    operator = db.Column(db.String(80), nullable=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('config_id', 'version', name='uq_config_version'),
+    )
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'config_id': self.config_id,
+            'version': self.version,
+            'config_value': _json.loads(self.config_value) if self.config_value else None,
+            'change_note': self.change_note,
+            'operator': self.operator,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
