@@ -197,3 +197,176 @@ def reorder_groups():
     db.session.commit()
     
     return jsonify({'success': True, 'message': '排序已更新'})
+
+
+@groups_bp.route('/batch/move', methods=['POST'])
+@login_required
+def batch_move_devices():
+    """批量移动设备到指定分组"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': '无效的请求数据'}), 400
+    
+    device_ids = data.get('device_ids', [])
+    target_group_id = data.get('target_group_id')
+    
+    if not device_ids:
+        return jsonify({'success': False, 'message': '请选择要移动的设备'}), 400
+    
+    # 验证目标分组
+    if target_group_id:
+        target_group = DeviceGroup.query.filter_by(
+            id=target_group_id,
+            user_id=current_user.id
+        ).first()
+        if not target_group:
+            return jsonify({'success': False, 'message': '目标分组不存在'}), 404
+    
+    # 批量更新
+    updated = Device.query.filter(
+        Device.id.in_(device_ids),
+        Device.user_id == current_user.id
+    ).update({'group_id': target_group_id}, synchronize_session=False)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'已将 {updated} 个设备移动到{"未分组" if not target_group_id else target_group.name}'
+    })
+
+
+@groups_bp.route('/batch/delete', methods=['POST'])
+@login_required
+def batch_delete_devices():
+    """批量删除设备"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': '无效的请求数据'}), 400
+    
+    device_ids = data.get('device_ids', [])
+    
+    if not device_ids:
+        return jsonify({'success': False, 'message': '请选择要删除的设备'}), 400
+    
+    # 批量删除
+    deleted = Device.query.filter(
+        Device.id.in_(device_ids),
+        Device.user_id == current_user.id
+    ).delete(synchronize_session=False)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'已删除 {deleted} 个设备'
+    })
+
+
+@groups_bp.route('/batch/update-status', methods=['POST'])
+@login_required
+def batch_update_device_status():
+    """批量更新设备状态"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': '无效的请求数据'}), 400
+    
+    device_ids = data.get('device_ids', [])
+    is_online = data.get('is_online')
+    
+    if not device_ids:
+        return jsonify({'success': False, 'message': '请选择要更新的设备'}), 400
+    
+    if is_online is None:
+        return jsonify({'success': False, 'message': '请指定设备状态'}), 400
+    
+    # 批量更新
+    updated = Device.query.filter(
+        Device.id.in_(device_ids),
+        Device.user_id == current_user.id
+    ).update({'is_online': is_online}, synchronize_session=False)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'已更新 {updated} 个设备状态为{"在线" if is_online else "离线"}'
+    })
+
+
+@groups_bp.route('/batch/assign-tags', methods=['POST'])
+@login_required
+def batch_assign_tags():
+    """批量为设备分配标签"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': '无效的请求数据'}), 400
+    
+    device_ids = data.get('device_ids', [])
+    tags = data.get('tags', [])
+    
+    if not device_ids:
+        return jsonify({'success': False, 'message': '请选择要更新的设备'}), 400
+    
+    if not tags:
+        return jsonify({'success': False, 'message': '请指定标签'}), 400
+    
+    # 获取设备并更新标签
+    devices = Device.query.filter(
+        Device.id.in_(device_ids),
+        Device.user_id == current_user.id
+    ).all()
+    
+    updated_count = 0
+    for device in devices:
+        # 假设 Device 模型有 tags 字段（JSON）
+        existing_tags = device.tags if hasattr(device, 'tags') and device.tags else []
+        if isinstance(existing_tags, str):
+            import json
+            try:
+                existing_tags = json.loads(existing_tags)
+            except:
+                existing_tags = []
+        
+        # 合并标签（去重）
+        new_tags = list(set(existing_tags + tags))
+        
+        if hasattr(device, 'tags'):
+            import json
+            device.tags = json.dumps(new_tags)
+            updated_count += 1
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'已为 {updated_count} 个设备分配标签'
+    })
+
+
+@groups_bp.route('/statistics', methods=['GET'])
+@login_required
+def get_group_statistics():
+    """获取分组统计信息"""
+    groups = DeviceGroup.query.filter_by(user_id=current_user.id).all()
+    
+    stats = {
+        'total_groups': len(groups),
+        'total_devices': Device.query.filter_by(user_id=current_user.id).count(),
+        'ungrouped_devices': Device.query.filter_by(user_id=current_user.id, group_id=None).count(),
+        'groups': []
+    }
+    
+    for group in groups:
+        device_count = Device.query.filter_by(group_id=group.id).count()
+        online_count = Device.query.filter_by(group_id=group.id, is_online=True).count()
+        
+        stats['groups'].append({
+            'id': group.id,
+            'name': group.name,
+            'device_count': device_count,
+            'online_count': online_count,
+            'offline_count': device_count - online_count
+        })
+    
+    return jsonify({'success': True, 'statistics': stats})
