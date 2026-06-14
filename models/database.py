@@ -1531,3 +1531,116 @@ class CommandTemplate(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+# ========================================================================
+# 数据聚合报表 (Data Aggregation Reports)
+# ========================================================================
+
+class Report(db.Model):
+    """数据报表"""
+    __tablename__ = 'reports'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 报表名称
+    name = db.Column(db.String(128), nullable=False)
+    
+    # 报表类型: daily / weekly / monthly / custom
+    report_type = db.Column(db.String(32), nullable=False, index=True)
+    
+    # 报表周期
+    period_start = db.Column(db.DateTime, nullable=False, index=True)
+    period_end = db.Column(db.DateTime, nullable=False, index=True)
+    
+    # 报表数据 (JSON)
+    report_data = db.Column(db.Text, nullable=True)
+    
+    # 报表摘要
+    summary = db.Column(db.Text, nullable=True)
+    
+    # 生成状态: pending / generating / completed / failed
+    status = db.Column(db.String(32), default='pending', nullable=False, index=True)
+    
+    # 错误信息
+    error_message = db.Column(db.String(500), nullable=True)
+    
+    # 文件路径 (如果导出为文件)
+    file_path = db.Column(db.String(255), nullable=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship('User', backref='reports')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'name': self.name,
+            'report_type': self.report_type,
+            'period_start': self.period_start.isoformat() if self.period_start else None,
+            'period_end': self.period_end.isoformat() if self.period_end else None,
+            'report_data': _json.loads(self.report_data) if self.report_data else None,
+            'summary': self.summary,
+            'status': self.status,
+            'error_message': self.error_message,
+            'file_path': self.file_path,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+        }
+
+
+class ReportSchedule(db.Model):
+    """报表定时任务"""
+    __tablename__ = 'report_schedules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 任务名称
+    name = db.Column(db.String(128), nullable=False)
+    
+    # 报表类型: daily / weekly / monthly
+    report_type = db.Column(db.String(32), nullable=False, index=True)
+    
+    # Cron 表达式 (简化版: hour, day_of_week, day_of_month)
+    schedule_hour = db.Column(db.Integer, default=0, nullable=False)  # 0-23
+    schedule_day_of_week = db.Column(db.Integer, nullable=True)  # 0-6 (0=Monday), None for daily/monthly
+    schedule_day_of_month = db.Column(db.Integer, nullable=True)  # 1-31, None for daily/weekly
+    
+    # 是否启用
+    enabled = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    
+    # 上次执行时间
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    
+    # 下次执行时间
+    next_run_at = db.Column(db.DateTime, nullable=True, index=True)
+    
+    # 通知配置
+    notify_email = db.Column(db.Boolean, default=False, nullable=False)
+    notify_webhook = db.Column(db.String(255), nullable=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='report_schedules')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'report_type': self.report_type,
+            'schedule_hour': self.schedule_hour,
+            'schedule_day_of_week': self.schedule_day_of_week,
+            'schedule_day_of_month': self.schedule_day_of_month,
+            'enabled': self.enabled,
+            'last_run_at': self.last_run_at.isoformat() if self.last_run_at else None,
+            'next_run_at': self.next_run_at.isoformat() if self.next_run_at else None,
+            'notify_email': self.notify_email,
+            'notify_webhook': self.notify_webhook,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
