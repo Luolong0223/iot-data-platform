@@ -32,6 +32,7 @@ from routes.simulator import simulator_bp
 from routes.monitor import monitor_bp
 from routes.simulator import simulator_bp
 from routes.protocol import protocol_bp
+from routes.lifecycle import lifecycle_bp
 from services.api_docs import docs_bp
 
 logging.basicConfig(level=logging.INFO)
@@ -120,6 +121,7 @@ def create_app(config_name=None):
     csrf.exempt(notifications_bp)
     csrf.exempt(simulator_bp)
     csrf.exempt(monitor_bp)
+    csrf.exempt(lifecycle_bp)
     # 占位，平台/可视化/RBAC 蓝图在下方注册后会被 exempt
     
     login_manager.login_view = 'pages.login'
@@ -147,6 +149,7 @@ def create_app(config_name=None):
     app.register_blueprint(audit_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(simulator_bp)
+    app.register_blueprint(lifecycle_bp)
     app.register_blueprint(monitor_bp)
     from routes.visualization import viz_bp as visualization_bp
     app.register_blueprint(visualization_bp)
