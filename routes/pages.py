@@ -104,6 +104,13 @@ def platform():
     return render_template('platform.html')
 
 
+@pages_bp.route('/rbac')
+@login_required
+def rbac():
+    """RBAC 角色权限管理"""
+    return render_template('rbac.html')
+
+
 @pages_bp.route('/admin')
 @login_required
 def admin():

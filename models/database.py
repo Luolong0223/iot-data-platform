@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey, Float, JSON
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
@@ -702,3 +703,88 @@ class ReportTask(db.Model):
             'last_status': self.last_status,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+
+# ========================================================================
+# RBAC 角色权限系统 (Task 4)
+# ========================================================================
+
+class Role(db.Model):
+    """角色 - 权限集合的容器"""
+    __tablename__ = 'roles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)
+    name = db.Column(db.String(64), nullable=False)
+    code = db.Column(db.String(64), nullable=False, index=True)
+    description = db.Column(db.String(255))
+    is_system = db.Column(db.Boolean, default=False)  # 系统内置角色不可删除
+    is_enabled = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='roles')
+    role_permissions = db.relationship('RolePermission', back_populates='role', cascade='all, delete-orphan', lazy='joined')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'code': self.code,
+            'description': self.description,
+            'is_system': self.is_system,
+            'is_enabled': self.is_enabled,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'permissions': [rp.permission.to_dict() for rp in self.role_permissions if rp.permission]
+        }
+
+
+class Permission(db.Model):
+    """权限 - 资源+操作的最小单位"""
+    __tablename__ = 'permissions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    resource = db.Column(db.String(64), nullable=False, index=True)  # device/alarm/user/...
+    action = db.Column(db.String(32), nullable=False)  # read/write/delete/admin
+    description = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    role_permissions = db.relationship('RolePermission', back_populates='permission', cascade='all, delete-orphan')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'code': self.code,
+            'name': self.name,
+            'resource': self.resource,
+            'action': self.action,
+            'description': self.description
+        }
+
+
+class RolePermission(db.Model):
+    """角色-权限关联"""
+    __tablename__ = 'role_permissions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id', ondelete='CASCADE'), nullable=False, index=True)
+    permission_id = db.Column(db.Integer, db.ForeignKey('permissions.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    role = db.relationship('Role', back_populates='role_permissions')
+    permission = db.relationship('Permission', back_populates='role_permissions')
+
+
+class UserRole(db.Model):
+    """用户-角色关联（一个用户可拥有多个角色）"""
+    __tablename__ = 'user_roles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    role_id = db.Column(db.Integer, db.ForeignKey('roles.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=_now, nullable=False)
+
+    user = db.relationship('User', backref='user_roles')
+    role = db.relationship('Role', backref='user_roles')

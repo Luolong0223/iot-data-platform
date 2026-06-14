@@ -92,6 +92,7 @@ def create_app(config_name=None):
     csrf.exempt(projects_bp)
     csrf.exempt(alarm_rules_bp)
     csrf.exempt(screen_bp)
+    # 占位，平台/可视化/RBAC 蓝图在下方注册后会被 exempt
     
     login_manager.login_view = 'pages.login'
     login_manager.login_message = '请先登录'
@@ -117,11 +118,26 @@ def create_app(config_name=None):
     app.register_blueprint(platform_bp)
     from routes.visualization import viz_bp as visualization_bp
     app.register_blueprint(visualization_bp)
+    from routes.rbac import rbac_bp
+    app.register_blueprint(rbac_bp)
+
     app.register_blueprint(docs_bp)
+
+    # 上面新注册的蓝图统一 exempt CSRF
+    csrf.exempt(platform_bp)
+    csrf.exempt(visualization_bp)
+    csrf.exempt(rbac_bp)
+    csrf.exempt(docs_bp)
 
     with app.app_context():
         db.create_all()
         create_default_admin()
+        try:
+            from services.rbac import RBACService
+            n = RBACService.init_permissions()
+            print(f'[RBAC] initialized {n} permissions')
+        except Exception as e:
+            print(f'[RBAC] init warning: {e}')
 
     # 自动启动 TCP 服务器（无论通过 run.py 还是 wsgi.py 入口）
     _start_tcp_server_once(app)

@@ -68,6 +68,11 @@
                             <i class="bi bi-cpu"></i> 平台管理
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'pages.rbac' %}active{% endif %}" href="{{ url_for('pages.rbac') }}">
+                            <i class="bi bi-shield-lock"></i> 角色权限
+                        </a>
+                    </li>
                     {% if current_user.is_authenticated and current_user.is_admin %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
