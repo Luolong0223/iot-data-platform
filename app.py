@@ -39,6 +39,7 @@ from routes.report import report_bp
 from routes.tenant import tenant_bp
 from routes.config import config_bp
 from routes.api_gateway import api_gateway_bp
+from routes.backup import backup_bp
 from services.api_docs import docs_bp
 
 logging.basicConfig(level=logging.INFO)
@@ -179,6 +180,7 @@ def create_app(config_name=None):
     app.register_blueprint(tenant_bp)
     app.register_blueprint(config_bp)
     app.register_blueprint(api_gateway_bp)
+    app.register_blueprint(backup_bp)
 
     app.register_blueprint(docs_bp)
 
@@ -197,6 +199,7 @@ def create_app(config_name=None):
     csrf.exempt(tenant_bp)
     csrf.exempt(config_bp)
     csrf.exempt(api_gateway_bp)
+    csrf.exempt(backup_bp)
     csrf.exempt(docs_bp)
 
     with app.app_context():

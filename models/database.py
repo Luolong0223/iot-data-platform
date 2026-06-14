@@ -2101,3 +2101,136 @@ class APIUsageStats(db.Model):
             'max_response_time_ms': self.max_response_time_ms,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
+
+
+# ========================================================================
+# 数据备份 (Data Backup)
+# ========================================================================
+
+class Backup(db.Model):
+    """数据备份记录"""
+    __tablename__ = 'backups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 备份名称
+    name = db.Column(db.String(128), nullable=False)
+    
+    # 备份类型: full / incremental / manual
+    backup_type = db.Column(db.String(32), nullable=False, index=True)
+    
+    # 备份状态: pending / running / completed / failed
+    status = db.Column(db.String(32), default='pending', nullable=False, index=True)
+    
+    # 备份文件路径
+    file_path = db.Column(db.String(500), nullable=True)
+    
+    # 备份大小 (字节)
+    file_size = db.Column(db.Integer, default=0, nullable=False)
+    
+    # 备份描述
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 备份内容统计 (JSON)
+    content_stats = db.Column(db.Text, nullable=True)
+    
+    # 错误信息
+    error_message = db.Column(db.String(1000), nullable=True)
+    
+    # 父备份ID (用于增量备份)
+    parent_backup_id = db.Column(db.Integer, db.ForeignKey('backups.id'), nullable=True, index=True)
+    
+    # 是否可恢复
+    restorable = db.Column(db.Boolean, default=True, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship('User', backref='backups')
+    parent_backup = db.relationship('Backup', remote_side=[id], backref='child_backups')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'name': self.name,
+            'backup_type': self.backup_type,
+            'status': self.status,
+            'file_path': self.file_path,
+            'file_size': self.file_size,
+            'file_size_human': self._format_size(self.file_size),
+            'description': self.description,
+            'content_stats': _json.loads(self.content_stats) if self.content_stats else None,
+            'error_message': self.error_message,
+            'parent_backup_id': self.parent_backup_id,
+            'restorable': self.restorable,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+        }
+    
+    @staticmethod
+    def _format_size(size_bytes: int) -> str:
+        """格式化文件大小"""
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.2f} KB"
+        elif size_bytes < 1024 * 1024 * 1024:
+            return f"{size_bytes / (1024 * 1024):.2f} MB"
+        else:
+            return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+class BackupSchedule(db.Model):
+    """备份定时任务"""
+    __tablename__ = 'backup_schedules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # 任务名称
+    name = db.Column(db.String(128), nullable=False)
+    
+    # 备份类型: full / incremental
+    backup_type = db.Column(db.String(32), nullable=False, index=True)
+    
+    # 调度配置
+    schedule_hour = db.Column(db.Integer, default=2, nullable=False)  # 0-23
+    schedule_day_of_week = db.Column(db.Integer, nullable=True)  # 0-6 (0=Monday)
+    schedule_day_of_month = db.Column(db.Integer, nullable=True)  # 1-31
+    
+    # 是否启用
+    enabled = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    
+    # 保留策略
+    retention_days = db.Column(db.Integer, default=30, nullable=False)
+    max_backups = db.Column(db.Integer, default=10, nullable=False)
+    
+    # 上次执行时间
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    
+    # 下次执行时间
+    next_run_at = db.Column(db.DateTime, nullable=True, index=True)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='backup_schedules')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'backup_type': self.backup_type,
+            'schedule_hour': self.schedule_hour,
+            'schedule_day_of_week': self.schedule_day_of_week,
+            'schedule_day_of_month': self.schedule_day_of_month,
+            'enabled': self.enabled,
+            'retention_days': self.retention_days,
+            'max_backups': self.max_backups,
+            'last_run_at': self.last_run_at.isoformat() if self.last_run_at else None,
+            'next_run_at': self.next_run_at.isoformat() if self.next_run_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
