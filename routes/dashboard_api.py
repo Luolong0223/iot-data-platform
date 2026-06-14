@@ -524,59 +524,7 @@ def device_distribution():
 
 # ============= 趋势数据接口 =============
 
-@dashboard_bp.route('/api/dashboard/trend', methods=['GET'])
-@login_required
-def get_trend():
-    """获取数据趋势（按小时聚合）"""
-    from sqlalchemy import func
-    from models.database import db, DataPoint, AlarmRecord
-    from datetime import datetime, timedelta
-
-    try:
-        hours = int(request.args.get('hours', 24))
-        now = datetime.utcnow()
-        start_time = now - timedelta(hours=hours)
-
-        # 数据点按小时聚合
-        data_query = db.session.query(
-            func.strftime('%Y-%m-%d %H:00', DataPoint.timestamp).label('hour'),
-            func.count(DataPoint.id).label('count')
-        ).filter(DataPoint.timestamp >= start_time).group_by('hour').all()
-
-        # 告警按小时聚合
-        alarm_query = db.session.query(
-            func.strftime('%Y-%m-%d %H:00', AlarmRecord.created_at).label('hour'),
-            func.count(AlarmRecord.id).label('count')
-        ).filter(AlarmRecord.created_at >= start_time).group_by('hour').all()
-
-        # 构建完整时间序列
-        data_dict = {h: c for h, c in data_query}
-        alarm_dict = {h: c for h, c in alarm_query}
-
-        timestamps = []
-        data_points = []
-        alarms = []
-
-        for i in range(hours):
-            t = now - timedelta(hours=hours - i - 1)
-            hour_key = t.strftime('%Y-%m-%d %H:00')
-            label = t.strftime('%m-%d %H:00')
-            timestamps.append(label)
-            data_points.append(data_dict.get(hour_key, 0))
-            alarms.append(alarm_dict.get(hour_key, 0))
-
-        return jsonify({
-            'success': True,
-            'data': {
-                'timestamps': timestamps,
-                'hours': timestamps,
-                'data_points': data_points,
-                'alarms': alarms,
-                'values': data_points
-            }
-        })
-    except Exception as e:
-        current_app.logger.error(f"获取趋势数据失败: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+# get_trend() 已定义在第 178 行，路由为 /api/dashboard/trend
+# 下方保留设备分布等额外接口
 
 
