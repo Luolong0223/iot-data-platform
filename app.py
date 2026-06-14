@@ -27,6 +27,7 @@ from routes.alarm_rules import alarm_rules_bp
 from routes.screen import screen_bp
 from routes.platform import platform_bp
 from routes.audit import audit_bp
+from routes.notifications import notifications_bp
 from services.api_docs import docs_bp
 
 logging.basicConfig(level=logging.INFO)
@@ -111,6 +112,8 @@ def create_app(config_name=None):
     csrf.exempt(projects_bp)
     csrf.exempt(alarm_rules_bp)
     csrf.exempt(screen_bp)
+    csrf.exempt(audit_bp)
+    csrf.exempt(notifications_bp)
     # 占位，平台/可视化/RBAC 蓝图在下方注册后会被 exempt
     
     login_manager.login_view = 'pages.login'
@@ -136,6 +139,7 @@ def create_app(config_name=None):
     app.register_blueprint(screen_bp)
     app.register_blueprint(platform_bp)
     app.register_blueprint(audit_bp)
+    app.register_blueprint(notifications_bp)
     from routes.visualization import viz_bp as visualization_bp
     app.register_blueprint(visualization_bp)
     from routes.rbac import rbac_bp
