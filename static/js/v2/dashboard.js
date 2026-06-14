@@ -378,7 +378,7 @@ class DashboardV2 {
         // 运行时长
         const uptimeEl = document.getElementById('systemUptime');
         if (uptimeEl) {
-            uptimeEl.textContent = data.uptime_human || data.uptime || '--';
+            uptimeEl.textContent = data.uptime || data.uptime_human || '--';
         }
 
         // TCP连接
@@ -393,15 +393,17 @@ class DashboardV2 {
             wsEl.textContent = data.ws_connections !== undefined ? data.ws_connections : '--';
         }
 
-        // CPU使用率
-        const cpu = data.cpu_usage !== undefined ? data.cpu_usage : 0;
+        // CPU使用率（API返回cpu_percent，兼容cpu_usage）
+        const cpu = data.cpu_percent !== undefined ? data.cpu_percent :
+                    (data.cpu_usage !== undefined ? data.cpu_usage : 0);
         const cpuUsageEl = document.getElementById('cpuUsage');
         const cpuBarEl = document.getElementById('cpuBar');
         if (cpuUsageEl) cpuUsageEl.textContent = cpu + '%';
         if (cpuBarEl) cpuBarEl.style.width = cpu + '%';
 
-        // 内存使用率
-        const mem = data.memory_usage !== undefined ? data.memory_usage : 0;
+        // 内存使用率（API返回mem_percent，兼容memory_usage）
+        const mem = data.mem_percent !== undefined ? data.mem_percent :
+                    (data.memory_usage !== undefined ? data.memory_usage : 0);
         const memUsageEl = document.getElementById('memUsage');
         const memBarEl = document.getElementById('memBar');
         if (memUsageEl) memUsageEl.textContent = mem + '%';

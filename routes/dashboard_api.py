@@ -483,25 +483,26 @@ def realtime_stream():
 def device_distribution():
     """设备类型分布和地域分布"""
     from sqlalchemy import func as sqlfunc
-    from models.database import Device
+    from models.database import db, Device
+    from flask_login import current_user
 
-    # 按类型统计
+    # 按类型统计（限定当前用户）
     type_stats = db.session.query(
         Device.device_type, sqlfunc.count(Device.id)
-    ).group_by(Device.device_type).all()
+    ).filter(Device.user_id == current_user.id).group_by(Device.device_type).all()
 
     type_dist = [{'name': t or '未分类', 'value': c} for t, c in type_stats]
 
-    # 按地域统计（location_name 字段）
+    # 按地域统计
     region_stats = db.session.query(
         Device.location_name, sqlfunc.count(Device.id)
-    ).group_by(Device.location_name).all()
+    ).filter(Device.user_id == current_user.id).group_by(Device.location_name).all()
 
     region_dist = [{'name': r or '未分配', 'value': c} for r, c in region_stats]
 
     # 按状态统计
-    online_count = Device.query.filter_by(is_online=True).count()
-    offline_count = Device.query.filter_by(is_online=False).count()
+    online_count = Device.query.filter_by(user_id=current_user.id, is_online=True).count()
+    offline_count = Device.query.filter_by(user_id=current_user.id, is_online=False).count()
 
     return jsonify({
         'success': True,
@@ -512,76 +513,6 @@ def device_distribution():
                 {'name': '在线', 'value': online_count},
                 {'name': '离线', 'value': offline_count}
             ]
-        }
-    })
-
-
-# ============= 系统信息接口 =============
-
-@dashboard_bp.route('/api/dashboard/system-info', methods=['GET'])
-@login_required
-def system_info():
-    """系统运行时信息"""
-    import os
-    import time
-    import psutil
-
-    # 进程启动时间
-    proc = psutil.Process(os.getpid())
-    create_time = proc.create_time()
-    uptime_seconds = int(time.time() - create_time)
-
-    # 转换为可读格式
-    days, remainder = divmod(uptime_seconds, 86400)
-    hours, remainder = divmod(remainder, 3600)
-    minutes, seconds = divmod(remainder, 60)
-
-    if days > 0:
-        uptime_human = f"{days}天{hours}时{minutes}分"
-    elif hours > 0:
-        uptime_human = f"{hours}时{minutes}分{seconds}秒"
-    else:
-        uptime_human = f"{minutes}分{seconds}秒"
-
-    # CPU和内存
-    cpu_usage = psutil.cpu_percent(interval=0.1)
-    mem = psutil.virtual_memory()
-    memory_usage = mem.percent
-
-    # TCP连接数（尝试统计psutil中所有ESTABLISHED连接）
-    tcp_count = 0
-    try:
-        for conn in psutil.net_connections(kind='inet'):
-            if conn.status == 'ESTABLISHED':
-                tcp_count += 1
-    except (psutil.AccessDenied, Exception):
-        tcp_count = 0
-
-    # WS连接数（从全局状态获取，如果存在的话）
-    ws_count = 0
-    try:
-        from flask import current_app
-        # 尝试从socketio获取
-        if hasattr(current_app, 'socketio_clients'):
-            ws_count = len(current_app.socketio_clients)
-        else:
-            # 模拟数据：基于活跃设备数估算
-            from models.database import Device
-            ws_count = Device.query.filter_by(is_online=True).count()
-    except Exception:
-        ws_count = 0
-
-    return jsonify({
-        'success': True,
-        'data': {
-            'uptime': uptime_human,
-            'uptime_seconds': uptime_seconds,
-            'tcp_connections': tcp_count,
-            'ws_connections': ws_count,
-            'cpu_usage': round(cpu_usage, 1),
-            'memory_usage': round(memory_usage, 1),
-            'memory_total_gb': round(mem.total / (1024**3), 2),
-            'memory_used_gb': round(mem.used / (1024**3), 2)
         }
     })
 
@@ -644,46 +575,3 @@ def get_trend():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# ============= 设备分布接口(修复版) =============
-
-@dashboard_bp.route('/api/dashboard/device-distribution-v2', methods=['GET'])
-@login_required
-def device_distribution_v2():
-    """设备类型分布和地域分布"""
-    from sqlalchemy import func
-    from models.database import db, Device
-    from flask_login import current_user
-
-    try:
-        # 按类型统计
-        type_stats = db.session.query(
-            Device.device_type, func.count(Device.id)
-        ).filter(Device.user_id == current_user.id).group_by(Device.device_type).all()
-
-        type_dist = [{'name': t or '未分类', 'value': c} for t, c in type_stats]
-
-        # 按地域统计
-        region_stats = db.session.query(
-            Device.location_name, func.count(Device.id)
-        ).filter(Device.user_id == current_user.id).group_by(Device.location_name).all()
-
-        region_dist = [{'name': r or '未分配', 'value': c} for r, c in region_stats]
-
-        # 按状态统计
-        online_count = Device.query.filter_by(user_id=current_user.id, is_online=True).count()
-        offline_count = Device.query.filter_by(user_id=current_user.id, is_online=False).count()
-
-        return jsonify({
-            'success': True,
-            'data': {
-                'by_type': type_dist,
-                'by_region': region_dist,
-                'by_status': [
-                    {'name': '在线', 'value': online_count},
-                    {'name': '离线', 'value': offline_count}
-                ]
-            }
-        })
-    except Exception as e:
-        current_app.logger.error(f"获取设备分布失败: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
