@@ -31,6 +31,7 @@ from routes.notifications import notifications_bp
 from routes.simulator import simulator_bp
 from routes.monitor import monitor_bp
 from routes.simulator import simulator_bp
+from routes.protocol import protocol_bp
 from services.api_docs import docs_bp
 
 logging.basicConfig(level=logging.INFO)
@@ -161,6 +162,7 @@ def create_app(config_name=None):
     app.register_blueprint(rule_engine_bp)
     from routes.custom_dashboard import custom_dashboard_bp
     app.register_blueprint(custom_dashboard_bp)
+    app.register_blueprint(protocol_bp)
 
     app.register_blueprint(docs_bp)
 
@@ -173,6 +175,7 @@ def create_app(config_name=None):
     csrf.exempt(shadow_bp)
     csrf.exempt(rule_engine_bp)
     csrf.exempt(custom_dashboard_bp)
+    csrf.exempt(protocol_bp)
     csrf.exempt(docs_bp)
 
     with app.app_context():

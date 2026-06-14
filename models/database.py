@@ -1182,3 +1182,51 @@ class DashboardWidget(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+# ========================================================================
+# 协议消息日志 (Protocol Message)
+# ========================================================================
+
+class ProtocolMessage(db.Model):
+    """协议消息日志"""
+    __tablename__ = 'protocol_messages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    adapter_id = db.Column(db.Integer, db.ForeignKey('protocol_adapters.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.Integer, nullable=True, index=True)
+    
+    # 消息方向: inbound (设备→平台) / outbound (平台→设备)
+    direction = db.Column(db.String(16), nullable=False)
+    
+    # 原始消息 (JSON)
+    raw_payload = db.Column(db.Text, nullable=True)
+    
+    # 解析后的数据 (JSON)
+    parsed_data = db.Column(db.Text, nullable=True)
+    
+    # 消息状态: success / failed / timeout
+    status = db.Column(db.String(16), default='success', nullable=False, index=True)
+    error_message = db.Column(db.String(500), nullable=True)
+    
+    # 元数据
+    topic = db.Column(db.String(256), nullable=True)  # MQTT topic / CoAP URI
+    qos = db.Column(db.Integer, nullable=True)  # MQTT QoS
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'adapter_id': self.adapter_id,
+            'device_id': self.device_id,
+            'direction': self.direction,
+            'raw_payload': _json.loads(self.raw_payload) if self.raw_payload else None,
+            'parsed_data': _json.loads(self.parsed_data) if self.parsed_data else None,
+            'status': self.status,
+            'error_message': self.error_message,
+            'topic': self.topic,
+            'qos': self.qos,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
