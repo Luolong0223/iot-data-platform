@@ -27,7 +27,7 @@ class OTAManager {
 
     async loadFirmware() {
         try {
-            const res = await apiRequest('/api/ota/firmware', { method: 'GET' });
+            const res = await apiRequest('/api/ota/firmware');
             if (res.success && Array.isArray(res.data)) {
                 this.firmwares = res.data;
             } else {
@@ -44,7 +44,7 @@ class OTAManager {
 
     async loadTasks() {
         try {
-            const res = await apiRequest('/api/ota/tasks', { method: 'GET' });
+            const res = await apiRequest('/api/ota/tasks');
             if (res.success && Array.isArray(res.data)) {
                 this.tasks = res.data;
             } else {
