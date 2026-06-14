@@ -26,6 +26,7 @@ from routes.projects import projects_bp
 from routes.alarm_rules import alarm_rules_bp
 from routes.screen import screen_bp
 from routes.platform import platform_bp
+from routes.audit import audit_bp
 from services.api_docs import docs_bp
 
 logging.basicConfig(level=logging.INFO)
@@ -134,6 +135,7 @@ def create_app(config_name=None):
     app.register_blueprint(alarm_rules_bp)
     app.register_blueprint(screen_bp)
     app.register_blueprint(platform_bp)
+    app.register_blueprint(audit_bp)
     from routes.visualization import viz_bp as visualization_bp
     app.register_blueprint(visualization_bp)
     from routes.rbac import rbac_bp
