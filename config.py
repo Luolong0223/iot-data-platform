@@ -121,6 +121,10 @@ class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
+    # SQLite doesn't support pool_size/max_overflow
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'echo': False
+    }
 
 
 config = {

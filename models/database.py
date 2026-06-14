@@ -1484,3 +1484,50 @@ class TrackPoint(db.Model):
             'recorded_at': self.recorded_at.isoformat() if self.recorded_at else None,
             'metadata': _json.loads(self.track_metadata) if self.track_metadata else None,
         }
+
+
+# ========================================================================
+# 命令模板 (Command Template)
+# ========================================================================
+
+class CommandTemplate(db.Model):
+    """命令模板"""
+    __tablename__ = 'command_templates'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    # 模板名称
+    name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    
+    # 命令类型
+    command_type = db.Column(db.String(32), nullable=False, index=True)
+    
+    # 默认参数 (JSON)
+    default_parameters = db.Column(db.Text, nullable=True)
+    
+    # 默认超时
+    default_timeout = db.Column(db.Integer, default=30, nullable=False)
+    
+    # 默认优先级
+    default_priority = db.Column(db.Integer, default=5, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=_now, onupdate=_now)
+
+    user = db.relationship('User', backref='command_templates')
+
+    def to_dict(self):
+        import json as _json
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'command_type': self.command_type,
+            'default_parameters': _json.loads(self.default_parameters) if self.default_parameters else None,
+            'default_timeout': self.default_timeout,
+            'default_priority': self.default_priority,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
