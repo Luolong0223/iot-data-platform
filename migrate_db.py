@@ -14,75 +14,55 @@ os.environ.setdefault('DATABASE_URL', 'sqlite:///iot_platform.db')
 from app import create_app
 from models.database import db
 
-# 期望添加的列 (model 中存在但 MySQL 可能缺失)
+# 期望添加的列 (基于真实模型 models/database.py)
 # 格式: {表名: [(列名, 列定义), ...]}
+# 重要:列定义必须与模型中 db.Column 的类型严格匹配
 EXPECTED_COLUMNS = {
     'users': [
+        # 模型字段: id, username, email, password_hash, is_active, is_admin, created_at, last_login
         ('last_login', 'DATETIME NULL'),
-        ('updated_at', 'DATETIME NULL'),
     ],
     'devices': [
-        ('custom_name', 'VARCHAR(120) NULL'),
-        ('description', 'VARCHAR(500) NULL'),
-        ('first_seen', 'DATETIME NULL'),
-        ('category_id', 'INT NULL'),
-        ('user_id', 'INT NULL'),
-        ('updated_at', 'DATETIME NULL'),
+        # 模型字段: id, name, custom_name, voltage_mv, category_id, user_id, is_online, last_seen, first_seen, total_packets
+        ('last_seen', 'DATETIME NULL'),
     ],
     'channels': [
-        ('first_seen', 'DATETIME NULL'),
-        ('updated_at', 'DATETIME NULL'),
+        # 模型字段: id, device_id, name, is_online, last_seen, first_seen
+        ('last_seen', 'DATETIME NULL'),
     ],
     'data_points': [
-        ('last_value', 'FLOAT NULL'),
+        # 模型字段: id, channel_id, name, value, last_value, last_updated, update_count
+        ('last_value', 'FLOAT DEFAULT 0.0'),
         ('last_updated', 'DATETIME NULL'),
-        ('update_count', 'INT NULL'),
-        ('unit', 'VARCHAR(20) NULL'),
+        ('update_count', 'INT DEFAULT 0'),
     ],
     'data_history': [
-        ('unit', 'VARCHAR(20) NULL'),
-    ],
-    'device_categories': [
-        ('description', 'VARCHAR(500) NULL'),
-        ('sort_order', 'INT DEFAULT 0'),
+        # 模型字段: id, data_point_id, device_id, channel_id, value, timestamp
+        # 全部已在基础表中
     ],
     'dashboard_widgets': [
-        ('data_point_id', 'INT NULL'),
-        ('device_id', 'INT NULL'),
-        ('channel_id', 'INT NULL'),
-        ('sort_order', 'INT DEFAULT 0'),
-        ('is_visible', 'TINYINT(1) DEFAULT 1'),
-        ('current_value', 'FLOAT NULL'),
-        ('last_updated', 'DATETIME NULL'),
+        # 模型字段: id, user_id, device_id, channel_id, data_point_id, sort_order, is_visible, color, created_at
+        # 全部已在基础表中
     ],
     'tcp_server_configs': [
-        ('enabled', 'TINYINT(1) DEFAULT 1'),
-        ('status', 'VARCHAR(20) DEFAULT "stopped"'),
+        # 模型字段: id, name, port, host, is_active, description, created_at, last_started, total_connections, total_messages, error_count
+        ('last_started', 'DATETIME NULL'),
+        ('total_connections', 'INT DEFAULT 0'),
+        ('total_messages', 'INT DEFAULT 0'),
+        ('error_count', 'INT DEFAULT 0'),
     ],
     'tcp_logs': [
-        ('device_ip', 'VARCHAR(45) NULL'),
-        ('device_port', 'INT NULL'),
-        ('server_port', 'INT NULL'),
-        ('direction', 'VARCHAR(10) DEFAULT "in"'),
-        ('payload', 'TEXT NULL'),
+        # 模型字段: id, port, client_ip, direction, content, status, error_message, timestamp
+        # 全部已在基础表中
     ],
     'system_configs': [
-        ('description', 'VARCHAR(500) NULL'),
-        ('updated_at', 'DATETIME NULL'),
+        # 模型字段: id, key, value, description, updated_at
+        # 全部已在基础表中
     ],
     'login_logs': [
+        # 模型字段: id, user_id, username, ip, user_agent, status, timestamp
+        ('ip', 'VARCHAR(50) NULL'),
         ('user_agent', 'VARCHAR(255) NULL'),
-        ('timestamp', 'DATETIME NULL'),
-        ('status', 'VARCHAR(20) NULL'),
-    ],
-    'roles': [
-        ('description', 'VARCHAR(500) NULL'),
-    ],
-    'permissions': [
-        ('description', 'VARCHAR(500) NULL'),
-    ],
-    'user_roles': [
-        ('granted_at', 'DATETIME NULL'),
     ],
 }
 

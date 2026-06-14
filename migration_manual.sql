@@ -1,116 +1,115 @@
 -- ============================================================
--- IoT Data Platform 数据库手动迁移脚本
+-- IoT Data Platform 精准迁移脚本 (v2)
 -- ============================================================
--- 用途: 修复 "Unknown column 'xxx' in 'field list'" 错误
--- 用法: 在 MySQL 客户端中执行 (需有 ALTER 权限)
---   mysql -u iot-platform -p iot-platform < migration_manual.sql
--- 或登录后 use iot-platform; 然后 source migration_manual.sql
+-- 基于真实模型(models/database.py)生成的列清单
+-- 关键改进:
+--   1. 用存储过程 + INFORMATION_SCHEMA 检测列是否存在
+--   2. 重复执行不会报错
+--   3. 列定义完全匹配模型
 -- ============================================================
-
--- ⚠️ 建议先执行 SELECT 检查表是否存在,再决定是否 ALTER
--- ⚠️ 部分列可能已存在,执行会报 "Duplicate column name",可以忽略
 
 SET NAMES utf8mb4;
 
--- ============================================================
--- 1. users 表
--- ============================================================
-ALTER TABLE `users` ADD COLUMN `last_login` DATETIME NULL;
-ALTER TABLE `users` ADD COLUMN `updated_at` DATETIME NULL;
+-- 删掉可能存在的旧过程
+DROP PROCEDURE IF EXISTS add_column_if_missing;
+
+DELIMITER //
+
+CREATE PROCEDURE add_column_if_missing(
+    IN p_table VARCHAR(64),
+    IN p_column VARCHAR(64),
+    IN p_definition VARCHAR(255)
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = p_table
+          AND COLUMN_NAME = p_column
+    ) THEN
+        SET @sql = CONCAT('ALTER TABLE `', p_table, '` ADD COLUMN `', p_column, '` ', p_definition);
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+        SELECT CONCAT('✅ 已添加 ', p_table, '.', p_column) AS result;
+    ELSE
+        SELECT CONCAT('⏭️  ', p_table, '.', p_column, ' 已存在,跳过') AS result;
+    END IF;
+END //
+
+DELIMITER ;
 
 -- ============================================================
--- 2. devices 表
+-- 1. users 表 (id, username, email, password_hash, is_active, is_admin, created_at, last_login)
 -- ============================================================
-ALTER TABLE `devices` ADD COLUMN `custom_name` VARCHAR(120) NULL;
-ALTER TABLE `devices` ADD COLUMN `description` VARCHAR(500) NULL;
-ALTER TABLE `devices` ADD COLUMN `first_seen` DATETIME NULL;
-ALTER TABLE `devices` ADD COLUMN `category_id` INT NULL;
-ALTER TABLE `devices` ADD COLUMN `user_id` INT NULL;
-ALTER TABLE `devices` ADD COLUMN `updated_at` DATETIME NULL;
+CALL add_column_if_missing('users', 'last_login', 'DATETIME NULL');
 
 -- ============================================================
--- 3. channels 表
+-- 2. devices 表 (id, name, custom_name, voltage_mv, category_id, user_id, is_online, last_seen, first_seen, total_packets)
 -- ============================================================
-ALTER TABLE `channels` ADD COLUMN `first_seen` DATETIME NULL;
-ALTER TABLE `channels` ADD COLUMN `updated_at` DATETIME NULL;
+CALL add_column_if_missing('devices', 'last_seen', 'DATETIME NULL');
 
 -- ============================================================
--- 4. data_points 表
+-- 3. channels 表 (id, device_id, name, is_online, last_seen, first_seen)
 -- ============================================================
-ALTER TABLE `data_points` ADD COLUMN `last_value` FLOAT NULL;
-ALTER TABLE `data_points` ADD COLUMN `last_updated` DATETIME NULL;
-ALTER TABLE `data_points` ADD COLUMN `update_count` INT NULL;
-ALTER TABLE `data_points` ADD COLUMN `unit` VARCHAR(20) NULL;
+-- 全部已在模型中,但保险起见都补一下
+CALL add_column_if_missing('channels', 'last_seen', 'DATETIME NULL');
+CALL add_column_if_missing('channels', 'first_seen', 'DATETIME NULL');
 
 -- ============================================================
--- 5. data_history 表
+-- 4. data_points 表 (id, channel_id, name, value, last_value, last_updated, update_count)
 -- ============================================================
-ALTER TABLE `data_history` ADD COLUMN `unit` VARCHAR(20) NULL;
+CALL add_column_if_missing('data_points', 'last_value', 'FLOAT DEFAULT 0.0');
+CALL add_column_if_missing('data_points', 'last_updated', 'DATETIME NULL');
+CALL add_column_if_missing('data_points', 'update_count', 'INT DEFAULT 0');
 
 -- ============================================================
--- 6. device_categories 表
+-- 5. data_history 表 (id, data_point_id, device_id, channel_id, value, timestamp)
 -- ============================================================
-ALTER TABLE `device_categories` ADD COLUMN `description` VARCHAR(500) NULL;
-ALTER TABLE `device_categories` ADD COLUMN `sort_order` INT DEFAULT 0;
+-- 全部已在模型中
 
 -- ============================================================
--- 7. dashboard_widgets 表
+-- 6. dashboard_widgets 表 (id, user_id, device_id, channel_id, data_point_id, sort_order, is_visible, color, created_at)
 -- ============================================================
-ALTER TABLE `dashboard_widgets` ADD COLUMN `data_point_id` INT NULL;
-ALTER TABLE `dashboard_widgets` ADD COLUMN `device_id` INT NULL;
-ALTER TABLE `dashboard_widgets` ADD COLUMN `channel_id` INT NULL;
-ALTER TABLE `dashboard_widgets` ADD COLUMN `sort_order` INT DEFAULT 0;
-ALTER TABLE `dashboard_widgets` ADD COLUMN `is_visible` TINYINT(1) DEFAULT 1;
-ALTER TABLE `dashboard_widgets` ADD COLUMN `current_value` FLOAT NULL;
-ALTER TABLE `dashboard_widgets` ADD COLUMN `last_updated` DATETIME NULL;
+-- 全部已在模型中
 
 -- ============================================================
--- 8. tcp_server_configs 表
+-- 7. tcp_server_configs 表 (id, name, port, host, is_active, description, created_at, last_started, total_connections, total_messages, error_count)
 -- ============================================================
-ALTER TABLE `tcp_server_configs` ADD COLUMN `enabled` TINYINT(1) DEFAULT 1;
-ALTER TABLE `tcp_server_configs` ADD COLUMN `status` VARCHAR(20) DEFAULT 'stopped';
+CALL add_column_if_missing('tcp_server_configs', 'last_started', 'DATETIME NULL');
+CALL add_column_if_missing('tcp_server_configs', 'total_connections', 'INT DEFAULT 0');
+CALL add_column_if_missing('tcp_server_configs', 'total_messages', 'INT DEFAULT 0');
+CALL add_column_if_missing('tcp_server_configs', 'error_count', 'INT DEFAULT 0');
 
 -- ============================================================
--- 9. tcp_logs 表
+-- 8. tcp_logs 表 (id, port, client_ip, direction, content, status, error_message, timestamp)
 -- ============================================================
-ALTER TABLE `tcp_logs` ADD COLUMN `device_ip` VARCHAR(45) NULL;
-ALTER TABLE `tcp_logs` ADD COLUMN `device_port` INT NULL;
-ALTER TABLE `tcp_logs` ADD COLUMN `server_port` INT NULL;
-ALTER TABLE `tcp_logs` ADD COLUMN `direction` VARCHAR(10) DEFAULT 'in';
-ALTER TABLE `tcp_logs` ADD COLUMN `payload` TEXT NULL;
+-- 全部已在模型中
 
 -- ============================================================
--- 10. system_configs 表
+-- 9. system_configs 表 (id, key, value, description, updated_at)
 -- ============================================================
-ALTER TABLE `system_configs` ADD COLUMN `description` VARCHAR(500) NULL;
-ALTER TABLE `system_configs` ADD COLUMN `updated_at` DATETIME NULL;
+-- 全部已在模型中
 
 -- ============================================================
--- 11. login_logs 表
+-- 10. login_logs 表 (id, user_id, username, ip, user_agent, status, timestamp) ❗ 缺 ip 列
 -- ============================================================
-ALTER TABLE `login_logs` ADD COLUMN `user_agent` VARCHAR(255) NULL;
-ALTER TABLE `login_logs` ADD COLUMN `timestamp` DATETIME NULL;
-ALTER TABLE `login_logs` ADD COLUMN `status` VARCHAR(20) NULL;
+CALL add_column_if_missing('login_logs', 'ip', 'VARCHAR(50) NULL');
+CALL add_column_if_missing('login_logs', 'user_agent', 'VARCHAR(255) NULL');
 
 -- ============================================================
--- 12. roles 表
+-- 验证关键表
 -- ============================================================
-ALTER TABLE `roles` ADD COLUMN `description` VARCHAR(500) NULL;
+SELECT '===================== 验证 users 表 =====================' AS step;
+DESCRIBE users;
 
--- ============================================================
--- 13. permissions 表
--- ============================================================
-ALTER TABLE `permissions` ADD COLUMN `description` VARCHAR(500) NULL;
+SELECT '===================== 验证 devices 表 =====================' AS step;
+DESCRIBE devices;
 
--- ============================================================
--- 14. user_roles 表
--- ============================================================
-ALTER TABLE `user_roles` ADD COLUMN `granted_at` DATETIME NULL;
+SELECT '===================== 验证 login_logs 表 =====================' AS step;
+DESCRIBE login_logs;
 
--- ============================================================
--- 验证: 列出 users 表的列
--- ============================================================
-DESCRIBE `users`;
+SELECT '===================== 验证 data_points 表 =====================' AS step;
+DESCRIBE data_points;
 
-SELECT '✅ 手动迁移脚本执行完成' AS message;
-SELECT '如遇 Duplicate column name 错误,说明该列已存在,可忽略' AS note;
+SELECT '✅ 全部迁移完成' AS done;
