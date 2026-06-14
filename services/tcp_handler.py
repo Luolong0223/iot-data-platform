@@ -257,6 +257,7 @@ class TcpConnectionHandler:
                             records_to_create.append(record)
                             notifications.append({
                                 'type': 'alarm',
+                                'user_id': user_id,
                                 'device_name': device_name,
                                 'channel_name': channel_name,
                                 'point_name': point_name,
@@ -273,4 +274,7 @@ class TcpConnectionHandler:
                 db.session.add(record)
             db.session.commit()
             for notification in notifications:
-                notify_sse_clients(notification)
+                try:
+                    push_to_user(notification.get('user_id', user_id), notification)
+                except Exception as e:
+                    logger.error(f"SSE推送失败: {e}")

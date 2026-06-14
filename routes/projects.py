@@ -4,9 +4,9 @@
 项目管理API路由
 """
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify
+from flask_login import login_required, current_user
 from models.database import db, Project, DeviceGroup, Device, SlaveChannel, DataPoint, User
-from routes.auth import login_required
 from sqlalchemy import func
 from datetime import datetime, timedelta
 
@@ -17,8 +17,8 @@ projects_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
 @login_required
 def list_projects():
     """获取项目列表"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     query = Project.query
     if not is_admin:
@@ -50,7 +50,7 @@ def list_projects():
 @login_required
 def create_project():
     """创建项目"""
-    user_id = g.user.id
+    user_id = current_user.id
     
     data = request.get_json() or {}
     name = data.get('name', '').strip()
@@ -82,8 +82,8 @@ def create_project():
 @login_required
 def get_project(project_id):
     """获取项目详情"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     project = Project.query.get(project_id)
     if not project:
@@ -160,8 +160,8 @@ def get_project(project_id):
 @login_required
 def update_project(project_id):
     """更新项目"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     project = Project.query.get(project_id)
     if not project:
@@ -194,8 +194,8 @@ def update_project(project_id):
 @login_required
 def delete_project(project_id):
     """删除项目"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     project = Project.query.get(project_id)
     if not project:
@@ -221,8 +221,8 @@ def delete_project(project_id):
 @login_required
 def list_groups(project_id):
     """获取分组列表"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     project = Project.query.get(project_id)
     if not project:
@@ -251,8 +251,8 @@ def list_groups(project_id):
 @login_required
 def create_group(project_id):
     """创建分组"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     project = Project.query.get(project_id)
     if not project:
@@ -293,8 +293,8 @@ def create_group(project_id):
 @login_required
 def update_group(project_id, group_id):
     """更新分组"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     group = DeviceGroup.query.get(group_id)
     if not group or group.project_id != project_id:
@@ -323,8 +323,8 @@ def update_group(project_id, group_id):
 @login_required
 def delete_group(project_id, group_id):
     """删除分组"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     group = DeviceGroup.query.get(group_id)
     if not group or group.project_id != project_id:
@@ -348,8 +348,8 @@ def delete_group(project_id, group_id):
 @login_required
 def get_tree():
     """获取完整层级树"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     # 获取用户的所有项目
     project_query = Project.query

@@ -108,10 +108,13 @@
 
     // 加载看板统计数据
     window.loadDashboardStats = function() {
-        apiRequest('/api/dashboard/stats').then(function(data) {
+        apiRequest('/api/dashboard/stats').then(function(resp) {
+            var data = resp.data || {};
             updateStatCards(data);
-            updateDeviceStatusList(data.devices || []);
-            updateAlarmList(data.recent_alarms || []);
+            // 从独立的alarms API获取最近报警
+            apiRequest('/api/alarms/records?per_page=5').then(function(ar) {
+                updateAlarmList(ar.records || []);
+            }).catch(function() {});
             updateDistributionChart(data);
         }).catch(function(err) {
             console.error('加载统计数据失败:', err);
@@ -120,26 +123,35 @@
 
     // 更新统计卡片
     function updateStatCards(data) {
+        var devices = data.devices || {};
+        var dataPoints = data.data_points || {};
+        var alarms = data.alarms || {};
+        
         // 设备总数
-        animateNumber('statDevices', data.total_devices || 0);
+        animateNumber('statDevices', devices.total || 0);
         
         // 在线率
-        const onlineRate = data.total_devices > 0 
-            ? Math.round((data.online_devices || 0) / data.total_devices * 100) 
-            : 0;
+        var totalD = devices.total || 0;
+        var onlineD = devices.online || 0;
+        var onlineRate = totalD > 0 ? Math.round(onlineD / totalD * 100) : 0;
         document.getElementById('statOnlineRate').textContent = onlineRate + '%';
-        document.getElementById('statOnline').textContent = data.online_devices || 0;
-        document.getElementById('statTotal').textContent = data.total_devices || 0;
+        document.getElementById('statOnline').textContent = onlineD;
+        document.getElementById('statTotal').textContent = totalD;
         
         // 今日数据
-        animateNumber('statTodayData', data.today_data_count || 0, true);
+        animateNumber('statTodayData', dataPoints.today || 0, true);
         
         // 今日报警
-        animateNumber('statTodayAlarms', data.today_alarm_count || 0);
+        animateNumber('statTodayAlarms', alarms.today || 0);
         
         // 更新时间
-        document.getElementById('lastUpdateTime').innerHTML = 
-            '<i class="bi bi-clock"></i> ' + new Date().toLocaleTimeString();
+        var updateEl = document.getElementById('lastUpdateTime');
+        if (updateEl) {
+            updateEl.innerHTML = '<i class="bi bi-clock"></i> ' + new Date().toLocaleTimeString();
+        }
+        
+        // 更新设备状态列表
+        updateDeviceStatusList();
     }
 
     // 数字动画
@@ -171,31 +183,34 @@
     }
 
     // 更新设备状态列表
-    function updateDeviceStatusList(devices) {
-        const container = document.getElementById('deviceStatusList');
-        if (!container || !devices.length) {
-            if (container) container.innerHTML = '<div class="text-center text-muted py-4">暂无设备</div>';
-            return;
-        }
-
-        let html = '';
-        devices.slice(0, 6).forEach(function(device) {
-            const statusClass = device.is_online ? 'online' : 'offline';
-            const statusText = device.is_online ? '在线' : '离线';
+    function updateDeviceStatusList() {
+        apiRequest('/api/devices').then(function(resp) {
+            var devices = resp.devices || [];
+            var container = document.getElementById('deviceStatusList');
+            if (!container) return;
             
-            html += `
-                <div class="device-status-item">
-                    <div class="device-status-dot ${statusClass}"></div>
-                    <div class="flex-grow-1">
-                        <div class="fw-bold">${device.name || '未命名'}</div>
-                        <small class="text-muted">${device.channels_count || 0} 通道</small>
-                    </div>
-                    <span class="badge bg-${device.is_online ? 'success' : 'secondary'}">${statusText}</span>
-                </div>
-            `;
-        });
+            if (!devices.length) {
+                container.innerHTML = '<div class="text-center text-muted py-4">暂无设备</div>';
+                return;
+            }
 
-        container.innerHTML = html;
+            var html = '';
+            devices.slice(0, 6).forEach(function(device) {
+                var statusClass = device.is_online ? 'online' : 'offline';
+                var statusText = device.is_online ? '在线' : '离线';
+                
+                html += '<div class="device-status-item">' +
+                    '<div class="device-status-dot ' + statusClass + '"></div>' +
+                    '<div class="flex-grow-1">' +
+                        '<div class="fw-bold">' + (device.name || '未命名') + '</div>' +
+                        '<small class="text-muted">' + (device.channels_count || 0) + ' 通道</small>' +
+                    '</div>' +
+                    '<span class="badge bg-' + (device.is_online ? 'success' : 'secondary') + '">' + statusText + '</span>' +
+                '</div>';
+            });
+
+            container.innerHTML = html;
+        }).catch(function() {});
     }
 
     // 更新报警列表
@@ -232,10 +247,15 @@
     function updateDistributionChart(data) {
         if (!distributionChart) return;
         
+        var devices = data.devices || {};
+        var totalD = devices.total || 0;
+        var onlineD = devices.online || 0;
+        var offlineD = devices.offline || 0;
+        
         distributionChart.data.datasets[0].data = [
-            data.online_devices || 0,
-            (data.total_devices || 0) - (data.online_devices || 0),
-            data.alarm_devices || 0
+            onlineD,
+            offlineD,
+            0
         ];
         distributionChart.update();
     }
@@ -244,14 +264,21 @@
     window.updateTrendChart = function(period) {
         if (!trendChart) return;
         
-        const deviceId = document.getElementById('chartDevice')?.value || 'all';
+        var deviceId = document.getElementById('chartDevice')?.value || 'all';
         
         apiRequest('/api/dashboard/trend?period=' + (period || '24h') + '&device_id=' + deviceId)
-            .then(function(data) {
-                if (!data.labels || !data.values) return;
+            .then(function(resp) {
+                var trendData = resp.data || [];
+                var labels = [];
+                var values = [];
+                trendData.forEach(function(item) {
+                    labels.push(item.time || item.hour || '');
+                    values.push(item.count || 0);
+                });
+                if (!labels.length) return;
                 
-                trendChart.data.labels = data.labels;
-                trendChart.data.datasets[0].data = data.values;
+                trendChart.data.labels = labels;
+                trendChart.data.datasets[0].data = values;
                 trendChart.update();
             })
             .catch(function(err) {
@@ -261,13 +288,14 @@
 
     // 加载设备选项
     window.loadDeviceOptions = function() {
-        apiRequest('/api/devices').then(function(data) {
-            const select = document.getElementById('chartDevice');
-            if (!select || !data.devices) return;
+        apiRequest('/api/devices').then(function(resp) {
+            var devices = resp.devices || [];
+            var select = document.getElementById('chartDevice');
+            if (!select) return;
             
             select.innerHTML = '<option value="all">所有设备</option>';
-            data.devices.forEach(function(device) {
-                select.innerHTML += `<option value="${device.id}">${device.name}</option>`;
+            devices.forEach(function(device) {
+                select.innerHTML += '<option value="' + device.id + '">' + device.name + '</option>';
             });
         });
     };

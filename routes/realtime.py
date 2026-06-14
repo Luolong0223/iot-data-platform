@@ -243,7 +243,7 @@ def trend():
         })
     
     # 获取通道
-    channels = Channel.query.filter(Channel.device_id.in_(device_ids)).all()
+    channels = SlaveChannel.query.filter(SlaveChannel.device_id.in_(device_ids)).all()
     channel_ids = [c.id for c in channels]
     
     if not channel_ids:
@@ -315,7 +315,7 @@ def latest():
         })
     
     # 获取通道
-    channels = Channel.query.filter(Channel.device_id.in_(device_ids)).all()
+    channels = SlaveChannel.query.filter(SlaveChannel.device_id.in_(device_ids)).all()
     channel_map = {c.id: c for c in channels}
     device_map = {d.id: d for d in devices}
     

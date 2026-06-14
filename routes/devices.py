@@ -193,8 +193,8 @@ def get_device_data(device_id):
         data.append({
             'id': dp.id,
             'channel_name': channel_name,
-            'data_key': dp.data_key,
-            'data_value': dp.data_value,
+            'data_key': dp.name,
+            'data_value': dp.value,
             'timestamp': dp.timestamp.isoformat() if dp.timestamp else None
         })
 

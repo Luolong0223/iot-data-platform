@@ -95,10 +95,17 @@
     // Load trend data
     function loadTrendData() {
         const period = document.getElementById('chartPeriod').value;
-        apiRequest('/api/dashboard/trend?period=' + period).then(function(data) {
-            if (data.labels && data.values) {
-                trendChart.data.labels = data.labels;
-                trendChart.data.datasets[0].data = data.values;
+        apiRequest('/api/dashboard/trend?period=' + period).then(function(resp) {
+            var trendData = resp.data || [];
+            var labels = [];
+            var values = [];
+            trendData.forEach(function(item) {
+                labels.push(item.time || item.hour || '');
+                values.push(item.count || 0);
+            });
+            if (labels.length) {
+                trendChart.data.labels = labels;
+                trendChart.data.datasets[0].data = values;
                 trendChart.update();
             }
         }).catch(function(err) {
@@ -108,24 +115,30 @@
 
     // Load dashboard stats
     function loadDashboardStats() {
-        apiRequest('/api/dashboard/stats').then(function(data) {
+        apiRequest('/api/dashboard/stats').then(function(resp) {
+            var data = resp.data || {};
+            var devices = data.devices || {};
+            var dataPoints = data.data_points || {};
+            var alarms = data.alarms || {};
+            
             // Devices
-            document.getElementById('statDevices').textContent = data.total_devices || 0;
-            document.getElementById('statOnline').textContent = data.online_devices || 0;
-            document.getElementById('statTotal').textContent = data.total_devices || 0;
+            document.getElementById('statDevices').textContent = devices.total || 0;
+            document.getElementById('statOnline').textContent = devices.online || 0;
+            document.getElementById('statTotal').textContent = devices.total || 0;
             
             // Online rate
-            const rate = data.total_devices > 0 ? 
-                Math.round((data.online_devices / data.total_devices) * 100) : 0;
+            var totalD = devices.total || 0;
+            var onlineD = devices.online || 0;
+            var rate = totalD > 0 ? Math.round((onlineD / totalD) * 100) : 0;
             document.getElementById('statOnlineRate').textContent = rate + '%';
 
             // Data count
-            const dataCount = data.today_data || 0;
+            var dataCount = dataPoints.today || 0;
             document.getElementById('statData').textContent = formatNumber(dataCount);
-            document.getElementById('statRate').textContent = data.data_rate || 0;
+            // dataRate is updated by SSE
 
             // Alarms
-            document.getElementById('statAlarms').textContent = data.today_alarms || 0;
+            document.getElementById('statAlarms').textContent = alarms.unread || 0;
         }).catch(function(err) {
             console.error('Load stats failed:', err);
         });
@@ -163,7 +176,7 @@
 
     // Load alarm list
     function loadAlarmList() {
-        apiRequest('/api/alarms/records?limit=5').then(function(data) {
+        apiRequest('/api/alarms/records?per_page=5').then(function(data) {
             const records = data.records || [];
             const container = document.getElementById('alarmList');
 
@@ -194,8 +207,8 @@
 
     // Load rank list
     function loadRankList() {
-        apiRequest('/api/dashboard/rank?limit=5').then(function(data) {
-            const ranks = data.ranks || [];
+        apiRequest('/api/dashboard/device-ranking?limit=5').then(function(resp) {
+            const ranks = resp.data || [];
             const container = document.getElementById('rankList');
 
             if (ranks.length === 0) {

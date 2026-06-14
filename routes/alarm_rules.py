@@ -4,9 +4,9 @@
 告警规则API路由
 """
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify
+from flask_login import login_required, current_user
 from models.database import db, AlarmRule, AlarmRecord, Device, SlaveChannel, DataPoint
-from routes.auth import login_required
 from sqlalchemy import func
 from datetime import datetime
 import json
@@ -18,8 +18,8 @@ alarm_rules_bp = Blueprint('alarm_rules', __name__, url_prefix='/api/alarm-rules
 @login_required
 def list_rules():
     """获取告警规则列表"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     query = AlarmRule.query
     if not is_admin:
@@ -48,7 +48,7 @@ def list_rules():
 @login_required
 def create_rule():
     """创建告警规则"""
-    user_id = g.user.id
+    user_id = current_user.id
     
     data = request.get_json() or {}
     name = data.get('name', '').strip()
@@ -102,8 +102,8 @@ def create_rule():
 @login_required
 def get_rule(rule_id):
     """获取告警规则详情"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     rule = AlarmRule.query.get(rule_id)
     if not rule:
@@ -128,8 +128,8 @@ def get_rule(rule_id):
 @login_required
 def update_rule(rule_id):
     """更新告警规则"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     rule = AlarmRule.query.get(rule_id)
     if not rule:
@@ -179,8 +179,8 @@ def update_rule(rule_id):
 @login_required
 def delete_rule(rule_id):
     """删除告警规则"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     rule = AlarmRule.query.get(rule_id)
     if not rule:
@@ -199,8 +199,8 @@ def delete_rule(rule_id):
 @login_required
 def toggle_rule(rule_id):
     """启用/禁用告警规则"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     rule = AlarmRule.query.get(rule_id)
     if not rule:
@@ -273,8 +273,8 @@ def check_data_point():
 @login_required
 def get_stats():
     """获取告警规则统计"""
-    user_id = g.user.id
-    is_admin = g.user.is_admin
+    user_id = current_user.id
+    is_admin = current_user.is_admin
     
     query = AlarmRule.query
     if not is_admin:

@@ -17,13 +17,13 @@ def events():
             yield 'data: ' + json.dumps({'type': 'connected'}) + '\n\n'
             
             # 导入realtime模块的推送函数
-            from routes.realtime import get_realtime_stream
+            from routes.realtime import get_stream_history
             
             # 获取实时数据流
             last_count = 0
             while True:
                 # 获取最新数据
-                stream_data = get_realtime_stream(user_id)
+                stream_data = get_stream_history(user_id)
                 current_count = len(stream_data)
                 
                 # 如果有新数据，发送
@@ -57,11 +57,11 @@ def device_events(device_id):
         try:
             yield 'data: ' + json.dumps({'type': 'connected', 'device_id': device_id}) + '\n\n'
             
-            from routes.realtime import get_realtime_stream
+            from routes.realtime import get_stream_history
             
             last_count = 0
             while True:
-                stream_data = get_realtime_stream(user_id, device_id)
+                stream_data = get_stream_history(user_id)
                 current_count = len(stream_data)
                 
                 if current_count > last_count:

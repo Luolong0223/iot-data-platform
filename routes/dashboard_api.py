@@ -171,8 +171,8 @@ def get_recent_data():
                 'id': dp.id,
                 'device_name': dp.channel.device.name if dp.channel and dp.channel.device else None,
                 'channel_name': dp.channel.name if dp.channel else None,
-                'data_key': dp.data_key,
-                'data_value': dp.data_value,
+                'data_key': dp.name,
+                'data_value': dp.value,
                 'timestamp': dp.timestamp.strftime('%Y-%m-%d %H:%M:%S') if dp.timestamp else None
             })
         

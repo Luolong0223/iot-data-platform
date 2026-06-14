@@ -24,6 +24,7 @@ from routes.realtime import realtime_bp
 from routes.dashboard_api import dashboard_bp
 from routes.projects import projects_bp
 from routes.alarm_rules import alarm_rules_bp
+from routes.screen import screen_bp
 
 logging.basicConfig(level=logging.INFO)
 
@@ -75,6 +76,21 @@ def create_app(config_name=None):
     csrf.init_app(app)
     limiter.init_app(app)
     
+    # API 路由免除 CSRF（所有 /api/ 前缀）
+    csrf.exempt(auth_bp)
+    csrf.exempt(devices_bp)
+    csrf.exempt(data_bp)
+    csrf.exempt(tcp_bp)
+    csrf.exempt(alarms_bp)
+    csrf.exempt(health_bp)
+    csrf.exempt(export_bp)
+    csrf.exempt(groups_bp)
+    csrf.exempt(realtime_bp)
+    csrf.exempt(dashboard_bp)
+    csrf.exempt(projects_bp)
+    csrf.exempt(alarm_rules_bp)
+    csrf.exempt(screen_bp)
+    
     login_manager.login_view = 'pages.login'
     login_manager.login_message = '请先登录'
     login_manager.login_message_category = 'warning'
@@ -95,6 +111,7 @@ def create_app(config_name=None):
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(alarm_rules_bp)
+    app.register_blueprint(screen_bp)
 
     with app.app_context():
         db.create_all()

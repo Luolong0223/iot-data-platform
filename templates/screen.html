@@ -68,6 +68,75 @@
         </div>
     </div>
 
+    <!-- 可选展示数据点控制面板 -->
+    <div class="screen-data-selector mb-4">
+        <div class="screen-card">
+            <div class="screen-card-header">
+                <i class="bi bi-eye me-2"></i>数据点选择器
+                <span class="badge bg-info ms-2" id="selectedCount">已选 0 个</span>
+            </div>
+            <div class="screen-card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label text-light-emphasis">选择设备</label>
+                        <select class="form-select form-select-sm" id="selectorDevice">
+                            <option value="">-- 选择设备 --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label text-light-emphasis">选择通道</label>
+                        <select class="form-select form-select-sm" id="selectorChannel" disabled>
+                            <option value="">-- 先选设备 --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label text-light-emphasis">选择数据点</label>
+                        <select class="form-select form-select-sm" id="selectorPoint" disabled>
+                            <option value="">-- 先选通道 --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-success btn-sm w-100" id="btnAddPoint" disabled>
+                            <i class="bi bi-plus-lg"></i> 添加
+                        </button>
+                    </div>
+                </div>
+                <!-- 已选数据点标签 -->
+                <div class="mt-3 d-flex flex-wrap gap-2" id="selectedPointsContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 可选数据点实时展示区 -->
+    <div class="row g-3 mb-4" id="selectedDataDisplay">
+        <div class="col-12">
+            <div class="screen-card">
+                <div class="screen-card-header">
+                    <i class="bi bi-table me-2"></i>选定数据点实时值
+                    <span class="badge bg-secondary ms-2" id="dataRefreshTime">--</span>
+                </div>
+                <div class="screen-card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped table-sm mb-0" id="selectedDataTable">
+                            <thead>
+                                <tr>
+                                    <th>设备</th>
+                                    <th>通道</th>
+                                    <th>数据点</th>
+                                    <th class="text-end">当前值</th>
+                                    <th class="text-end">更新时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="selectedDataBody">
+                                <tr><td colspan="5" class="text-center text-muted py-3">请添加要监控的数据点</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 主要内容区 -->
     <div class="row g-4">
         <!-- 实时数据流 -->
@@ -337,6 +406,48 @@
     to { transform: rotate(360deg); }
 }
 
+/* 数据点选择器样式 */
+.screen-data-selector .screen-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+}
+.screen-data-selector .form-select {
+    background: rgba(0,0,0,0.3);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    font-size: 0.85rem;
+}
+.screen-data-selector .form-select:focus {
+    border-color: rgba(46,204,113,0.5);
+    box-shadow: 0 0 10px rgba(46,204,113,0.2);
+}
+.screen-data-selector .form-select option {
+    background: #1a1a2e;
+    color: #fff;
+}
+.screen-data-selector .form-label {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 4px;
+}
+.screen-data-selector .badge {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+}
+#selectedDataTable th {
+    border-color: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.7);
+    font-size: 0.85rem;
+}
+#selectedDataTable td {
+    border-color: rgba(255,255,255,0.05);
+    vertical-align: middle;
+}
+#selectedPointsContainer .badge {
+    font-size: 0.8rem;
+    transition: all 0.3s;
+}
+
 .progress-bar-custom {
     height: 8px;
     background: rgba(255,255,255,0.1);
@@ -483,14 +594,14 @@ async function loadDevices() {
 // 加载报警列表
 async function loadAlarms() {
     try {
-        const res = await fetch('/api/alarms?limit=5');
+        const res = await fetch('/api/alarms/records?per_page=5');
         const json = await res.json();
         const list = document.getElementById('alarmList');
-        if (!json.alarms || json.alarms.length === 0) {
+        if (!json.records || json.records.length === 0) {
             list.innerHTML = '<div class="text-center text-muted py-4">暂无报警</div>';
             return;
         }
-        list.innerHTML = json.alarms.map(a => `
+        list.innerHTML = json.records.map(a => `
             <div class="alarm-item">
                 <div>
                     <i class="bi bi-exclamation-triangle me-2"></i>
@@ -634,6 +745,196 @@ function formatTime(dateStr) {
     return date.toLocaleTimeString('zh-CN', { hour12: false });
 }
 
+// ====== 数据点选择器功能 ======
+// 已选数据点列表
+let selectedPoints = [];
+
+// 加载设备下拉
+async function loadDeviceSelector() {
+    try {
+        const res = await fetch('/api/screen/data-points');
+        const json = await res.json();
+        if (!json.success) return;
+        
+        const sel = document.getElementById('selectorDevice');
+        const devices = json.data || [];
+        sel.innerHTML = '<option value="">-- 选择设备 --</option>';
+        devices.forEach(function(d) {
+            sel.innerHTML += '<option value="' + d.id + '">' + d.name + 
+                (d.is_online ? ' [在线]' : ' [离线]') + ' (' + (d.channels ? d.channels.length : 0) + '通道)</option>';
+        });
+    } catch (e) {
+        console.error('加载设备列表失败:', e);
+    }
+}
+
+// 设备选择变更 → 加载通道
+document.getElementById('selectorDevice').addEventListener('change', function() {
+    const deviceId = this.value;
+    const chSel = document.getElementById('selectorChannel');
+    const ptSel = document.getElementById('selectorPoint');
+    ptSel.innerHTML = '<option value="">-- 先选通道 --</option>';
+    ptSel.disabled = true;
+    document.getElementById('btnAddPoint').disabled = true;
+    
+    if (!deviceId) {
+        chSel.innerHTML = '<option value="">-- 先选设备 --</option>';
+        chSel.disabled = true;
+        return;
+    }
+    
+    // 从数据中获取通道
+    fetch('/api/screen/data-points?device_id=' + deviceId).then(function(r) { return r.json(); }).then(function(json) {
+        if (!json.success || !json.data || !json.data.length) return;
+        var device = json.data[0];
+        var channels = device.channels || [];
+        chSel.innerHTML = '<option value="">-- 选择通道 --</option>';
+        channels.forEach(function(ch) {
+            chSel.innerHTML += '<option value="' + ch.id + '" data-name="' + ch.name + '">' + ch.name + '</option>';
+        });
+        chSel.disabled = false;
+    }).catch(function(e) { console.error('加载通道失败:', e); });
+});
+
+// 通道选择变更 → 加载数据点
+document.getElementById('selectorChannel').addEventListener('change', function() {
+    const ptSel = document.getElementById('selectorPoint');
+    const btnAdd = document.getElementById('btnAddPoint');
+    
+    if (!this.value) {
+        ptSel.innerHTML = '<option value="">-- 先选通道 --</option>';
+        ptSel.disabled = true;
+        btnAdd.disabled = true;
+        return;
+    }
+    
+    // 获取该通道的数据点
+    fetch('/api/screen/selected-data?channel_id=' + this.value).then(function(r) { return r.json(); }).then(function(json) {
+        var data = json.data || [];
+        var names = {};
+        data.forEach(function(dp) { names[dp.point_name] = true; });
+        var pointNames = Object.keys(names);
+        
+        ptSel.innerHTML = '<option value="">-- 选择数据点 --</option>';
+        pointNames.forEach(function(name) {
+            ptSel.innerHTML += '<option value="' + name + '">' + name + '</option>';
+        });
+        ptSel.disabled = false;
+        btnAdd.disabled = false;
+    }).catch(function(e) { console.error('加载数据点失败:', e); });
+});
+
+// 添加选中数据点
+document.getElementById('btnAddPoint').addEventListener('click', function() {
+    var deviceEl = document.getElementById('selectorDevice');
+    var chEl = document.getElementById('selectorChannel');
+    var ptEl = document.getElementById('selectorPoint');
+    
+    var deviceId = deviceEl.value;
+    var deviceName = deviceEl.options[deviceEl.selectedIndex] ? deviceEl.options[deviceEl.selectedIndex].text.split(' [')[0] : '';
+    var channelId = chEl.value;
+    var channelName = chEl.options[chEl.selectedIndex] ? chEl.options[chEl.selectedIndex].text : '';
+    var pointName = ptEl.value;
+    
+    if (!deviceId || !channelId || !pointName) {
+        alert('请完整选择设备、通道和数据点');
+        return;
+    }
+    
+    // 检查是否已选
+    var key = deviceId + '_' + channelId + '_' + pointName;
+    var exists = selectedPoints.some(function(p) { return p.key === key; });
+    if (exists) {
+        alert('该数据点已添加');
+        return;
+    }
+    
+    var item = {
+        key: key,
+        device_id: parseInt(deviceId),
+        device_name: deviceName,
+        channel_id: parseInt(channelId),
+        channel_name: channelName,
+        point_name: pointName,
+        value: '-',
+        timestamp: null
+    };
+    selectedPoints.push(item);
+    refreshSelectedPointsUI();
+    loadSelectedData();
+});
+
+// 移除选中数据点
+function removeSelectedPoint(key) {
+    selectedPoints = selectedPoints.filter(function(p) { return p.key !== key; });
+    refreshSelectedPointsUI();
+    if (selectedPoints.length === 0) {
+        document.getElementById('selectedDataBody').innerHTML = 
+            '<tr><td colspan="5" class="text-center text-muted py-3">请添加要监控的数据点</td></tr>';
+        document.getElementById('dataRefreshTime').textContent = '--';
+    }
+}
+
+// 刷新已选数据点UI
+function refreshSelectedPointsUI() {
+    var container = document.getElementById('selectedPointsContainer');
+    document.getElementById('selectedCount').textContent = '已选 ' + selectedPoints.length + ' 个';
+    
+    if (selectedPoints.length === 0) {
+        container.innerHTML = '<span class="text-muted">暂无选择的数据点</span>';
+        return;
+    }
+    
+    container.innerHTML = selectedPoints.map(function(p) {
+        return '<span class="badge bg-info d-inline-flex align-items-center gap-1">' +
+            p.device_name + ' / ' + p.channel_name + ' / ' + p.point_name + ' = ' + p.value +
+            ' <a href="javascript:void(0)" class="text-light ms-1" onclick="removeSelectedPoint(\'' + p.key + '\')" style="text-decoration:none">&times;</a>' +
+            '</span>';
+    }).join('');
+}
+
+// 加载选中数据点的最新值
+async function loadSelectedData() {
+    if (selectedPoints.length === 0) return;
+    
+    try {
+        var promises = selectedPoints.map(function(p) {
+            return fetch('/api/screen/selected-data?channel_id=' + p.channel_id + '&point_name=' + encodeURIComponent(p.point_name))
+                .then(function(r) { return r.json(); });
+        });
+        
+        var results = await Promise.all(promises);
+        
+        results.forEach(function(json, idx) {
+            var data = json.data || [];
+            if (data.length > 0) {
+                selectedPoints[idx].value = data[0].value;
+                selectedPoints[idx].timestamp = data[0].timestamp;
+            }
+        });
+        
+        // 刷新表格
+        var tbody = document.getElementById('selectedDataBody');
+        tbody.innerHTML = selectedPoints.map(function(p) {
+            var val = p.value !== null && p.value !== undefined ? 
+                (typeof p.value === 'number' ? p.value.toFixed(4) : p.value) : '-';
+            var time = p.timestamp ? new Date(p.timestamp).toLocaleTimeString('zh-CN', {hour12: false}) : '-';
+            return '<tr>' +
+                '<td>' + p.device_name + '</td>' +
+                '<td>' + p.channel_name + '</td>' +
+                '<td>' + p.point_name + '</td>' +
+                '<td class="text-end fw-bold text-success">' + val + '</td>' +
+                '<td class="text-end text-muted">' + time + '</td>' +
+                '</tr>';
+        }).join('');
+        
+        document.getElementById('dataRefreshTime').textContent = 
+            new Date().toLocaleTimeString('zh-CN', {hour12: false});
+    } catch (e) {
+        console.error('加载选中数据失败:', e);
+    }
+}
+
 // 图表周期切换
 document.getElementById('chartPeriod').addEventListener('change', loadTrend);
 
@@ -645,6 +946,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDevices();
     loadAlarms();
     loadRanks();
+    loadDeviceSelector();
     connectSSE();
     
     // 定时刷新
@@ -652,6 +954,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(loadTrend, 60000);  // 1分钟刷新趋势
     setInterval(loadDevices, 30000); // 30秒刷新设备
     setInterval(loadAlarms, 30000);  // 30秒刷新报警
+    setInterval(loadSelectedData, 5000); // 5秒刷新选中的数据点
+    setInterval(refreshSelectedPointsUI, 5000); // 5秒刷新标签值
 });
 </script>
 {% endblock %}
