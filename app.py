@@ -120,6 +120,8 @@ def create_app(config_name=None):
     app.register_blueprint(visualization_bp)
     from routes.rbac import rbac_bp
     app.register_blueprint(rbac_bp)
+    from routes.alarm_engine import alarm_engine_bp
+    app.register_blueprint(alarm_engine_bp)
 
     app.register_blueprint(docs_bp)
 
@@ -127,6 +129,7 @@ def create_app(config_name=None):
     csrf.exempt(platform_bp)
     csrf.exempt(visualization_bp)
     csrf.exempt(rbac_bp)
+    csrf.exempt(alarm_engine_bp)
     csrf.exempt(docs_bp)
 
     with app.app_context():
