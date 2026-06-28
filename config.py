@@ -1,30 +1,49 @@
 import os
+import secrets
+import logging
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
     """基础配置"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'iot-data-platform-secret-key-2024-optimized'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
     
-    # 数据库配置 - MySQL（优先），SQLite（回退）
-    MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
-    MYSQL_PORT = int(os.environ.get('MYSQL_PORT', 3306))
-    MYSQL_USER = os.environ.get('MYSQL_USER', 'iot-platform')
-    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', 'cRwLGPScNejLEeBt')
-    MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE', 'iot-platform')
+    # 数据库配置 - 优先读取 DATABASE_URL，否则尝试 MySQL，最后回退到 SQLite
+    _db_url = os.environ.get('DATABASE_URL', '')
+    _mysql_password = os.environ.get('MYSQL_PASSWORD', 'cRwLGPScNejLEeBt')
     
-    # 构建数据库URI（优先使用MySQL，可通过环境变量DATABASE_URL覆盖）
-    # 示例：export DATABASE_URL=sqlite:///database.db  使用SQLite
-    _mysql_uri = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}?charset=utf8mb4'
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or _mysql_uri
+    if not _db_url:
+        if _mysql_password:
+            # MySQL 模式
+            _mysql_host = os.environ.get('MYSQL_HOST', 'localhost')
+            _mysql_port = int(os.environ.get('MYSQL_PORT', 3306))
+            _mysql_user = os.environ.get('MYSQL_USER', 'iot-platform')
+            _mysql_database = os.environ.get('MYSQL_DATABASE', 'iot-platform')
+            _db_url = f'mysql+pymysql://{_mysql_user}:{_mysql_password}@{_mysql_host}:{_mysql_port}/{_mysql_database}?charset=utf8mb4'
+            logger.info("Using MySQL database")
+        else:
+            # 回退到 SQLite
+            _instance_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+            os.makedirs(_instance_dir, exist_ok=True)
+            _db_url = f'sqlite:///{os.path.join(_instance_dir, "database.db")}'
+            logger.warning("MYSQL_PASSWORD not set, falling back to SQLite. Set MYSQL_PASSWORD environment variable for MySQL.")
+    
+    SQLALCHEMY_DATABASE_URI = _db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # MySQL 特有配置（仅 MySQL 时使用）
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 10,
-        'pool_recycle': 3600,
         'pool_pre_ping': True,
-        'max_overflow': 20,
         'echo': False
     }
+    if 'mysql' in _db_url:
+        SQLALCHEMY_ENGINE_OPTIONS.update({
+            'pool_size': 10,
+            'pool_recycle': 3600,
+            'max_overflow': 20,
+        })
     
     # 会话配置
     PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
@@ -39,9 +58,9 @@ class Config:
     TCP_TIMEOUT = 30
     TCP_MAX_CONNECTIONS = 100
     
-    # 管理员默认凭证
-    ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME') or 'admin'
-    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD') or 'admin123'
+    # 管理员默认凭证（生产环境必须通过环境变量设置）
+    ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', secrets.token_urlsafe(16))
     
     # 文件上传配置
     MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32MB

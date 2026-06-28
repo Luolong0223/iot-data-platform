@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - IoT Data Platform</title>
+    <title>登录 - 遵义流量计采集测试</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/v2/base.css') }}">
     <style>
         .login-container {
@@ -370,16 +370,16 @@
                     <div class="login-brand-icon">
                         <i class="bi bi-cpu-fill"></i>
                     </div>
-                    <h1>IoT Data Platform</h1>
-                    <p>企业级物联网数据可视化平台</p>
+                    <h1>遵义流量计采集测试</h1>
+                    <p>流量计数据采集与监控平台</p>
                 </div>
                 
                 <ul class="login-features">
-                    <li><i class="bi bi-check-lg"></i> 实时数据采集与监控</li>
-                    <li><i class="bi bi-check-lg"></i> 多协议适配（MQTT/CoAP/Modbus）</li>
-                    <li><i class="bi bi-check-lg"></i> 智能告警与规则引擎</li>
-                    <li><i class="bi bi-check-lg"></i> 数据大屏可视化展示</li>
-                    <li><i class="bi bi-check-lg"></i> 多租户隔离与权限管理</li>
+                    <li><i class="bi bi-check-lg"></i> 实时流量数据采集</li>
+                    <li><i class="bi bi-check-lg"></i> TCP 透传数据接收</li>
+                    <li><i class="bi bi-check-lg"></i> 设备在线状态监控</li>
+                    <li><i class="bi bi-check-lg"></i> 历史数据查询与导出</li>
+                    <li><i class="bi bi-check-lg"></i> 数据可视化展示</li>
                 </ul>
             </div>
             
@@ -396,8 +396,7 @@
                 <div class="error-message" id="errorMsg"></div>
                 {% endif %}
                 
-                <form method="POST" action="{{ url_for('pages.login') }}" id="loginForm">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <form id="loginForm">
                     
                     <div class="form-group">
                         <label for="username">用户名</label>
@@ -426,14 +425,14 @@
                         <a href="#" class="forgot-link">忘记密码？</a>
                     </div>
                     
-                    <button type="submit" class="btn-login" id="submitBtn">
+                    <button type="button" class="btn-login" id="submitBtn" onclick="doLogin()">
                         <span class="spinner"></span>
                         <span class="btn-text">登 录</span>
                     </button>
                 </form>
                 
                 <div class="login-footer">
-                    <p>&copy; 2025 IoT Data Platform. All rights reserved.</p>
+                    <p>&copy; 2025 遵义流量计采集测试. All rights reserved.</p>
                 </div>
             </div>
         </div>
@@ -466,6 +465,40 @@
                 errorMsg.classList.remove('show');
             }, 5000);
         }
+        
+        // AJAX 登录
+        async function doLogin() {
+            const btn = document.getElementById('submitBtn');
+            btn.classList.add('loading');
+            try {
+                const resp = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        username: document.getElementById('username').value,
+                        password: document.getElementById('password').value,
+                        remember: document.querySelector('input[name="remember"]').checked
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    window.location.href = '/dashboard';
+                } else {
+                    document.getElementById('errorMsg').textContent = data.message || '登录失败';
+                    document.getElementById('errorMsg').classList.add('show');
+                    btn.classList.remove('loading');
+                }
+            } catch(e) {
+                document.getElementById('errorMsg').textContent = '网络错误，请重试';
+                document.getElementById('errorMsg').classList.add('show');
+                btn.classList.remove('loading');
+            }
+        }
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && document.activeElement.closest('#loginForm')) {
+                doLogin();
+            }
+        });
     </script>
 </body>
 </html>

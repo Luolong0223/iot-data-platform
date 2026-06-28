@@ -153,8 +153,10 @@ def update_me():
     if 'password' in data and data['password']:
         old_password = data.get('old_password', '')
         
-        # 验证旧密码
-        if old_password and not current_user.check_password(old_password):
+        # 验证旧密码（必须提供且正确）
+        if not old_password:
+            return jsonify({'success': False, 'message': '请输入原密码'}), 400
+        if not current_user.check_password(old_password):
             return jsonify({'success': False, 'message': '原密码错误'}), 400
         
         # 验证新密码强度

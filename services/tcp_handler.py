@@ -1,24 +1,13 @@
-import asyncio
 import json
 import logging
-import os
 import threading
 from datetime import datetime
 
-from models.database import db, User, Device, SlaveChannel, DataPoint, TcpLog, AlarmRule, AlarmRecord
-from services.data_parser import parse_tcp_data
+from models.database import db, User, Device, Channel, DataPoint, DataHistory, TcpLog
+from services.tcp_parser import parse_message
 
 logger = logging.getLogger(__name__)
 
-# 添加文件日志处理器
-log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tcp_handler.log')
-file_handler = logging.FileHandler(log_file, encoding='utf-8')
-file_handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
-
-# TCP 状态跟踪
 _tcp_stats = {
     'total_connections': 0,
     'total_messages': 0,
@@ -27,27 +16,49 @@ _tcp_stats = {
 _tcp_stats_lock = threading.Lock()
 
 
-def notify_realtime_stream(user_id, data):
-    """推送数据到实时数据流"""
-    try:
-        from routes.realtime import add_to_stream, push_to_user
-        add_to_stream(user_id, data)
-        push_to_user(user_id, {
-            'type': 'new_data',
-            'timestamp': datetime.now().isoformat(),
-            'data': data
-        })
-    except Exception as e:
-        logger.warning(f"Failed to push to realtime stream: {e}")
+def process_tcp_data(user_id, raw_data, client_ip=None):
+    """处理单条 TCP 数据（供 tcp_server.py 调用）"""
+    from flask import current_app
+    with current_app.app_context():
+        user = User.query.get(user_id)
+        if not user:
+            logger.error(f"User {user_id} not found")
+            return
+
+        parsed = False
+        error_msg = None
+
+        try:
+            parsed_msg = parse_message(raw_data)
+            parsed = True
+            store_data(user_id, parsed_msg)
+        except ValueError as e:
+            error_msg = str(e)
+            logger.warning(f"Failed to parse TCP data for user {user_id}: {error_msg}")
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Database error for user {user_id}: {e}", exc_info=True)
+
+        try:
+            tcp_log = TcpLog(
+                port=user_id,
+                client_ip=client_ip,
+                direction='in',
+                content=raw_data[:2000] if raw_data else '',
+                status='success' if parsed else 'error',
+                error_message=error_msg
+            )
+            db.session.add(tcp_log)
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Failed to save TCP log: {e}")
+            db.session.rollback()
 
 
 def get_tcp_status():
-    """获取TCP服务器状态"""
     from tcp_server import servers
-    
     with _tcp_stats_lock:
         stats = _tcp_stats.copy()
-    
     return {
         'running': len(servers) > 0,
         'active_ports': list(servers.keys()),
@@ -71,12 +82,12 @@ class TcpConnectionHandler:
                 try:
                     data = await asyncio.wait_for(
                         reader.read(self.app.config.get('TCP_BUFFER_SIZE', 4096)),
-                        timeout=self.app.config.get('TCP_TIMEOUT', 300)  # 增加到5分钟
+                        timeout=self.app.config.get('TCP_TIMEOUT', 300)
                     )
                 except asyncio.TimeoutError:
                     logger.info(f"TCP connection timeout for {addr}")
                     break
-                
+
                 if not data:
                     logger.info(f"TCP client {addr} disconnected (empty data)")
                     break
@@ -85,12 +96,10 @@ class TcpConnectionHandler:
                 if not raw_data:
                     continue
 
-                # 单独处理每条数据，出错不影响连接
                 try:
-                    await self.process_data(raw_data, addr)
+                    self.process_data(raw_data, addr)
                 except Exception as e:
                     logger.error(f"TCP data processing error for {addr}: {e}", exc_info=True)
-                    # 继续保持连接，不退出循环
 
         except ConnectionResetError:
             logger.info(f"TCP connection reset by {addr}")
@@ -106,7 +115,7 @@ class TcpConnectionHandler:
                 pass
             logger.info(f"TCP connection closed for {addr}")
 
-    async def process_data(self, raw_data, client_addr=None):
+    def process_data(self, raw_data, client_addr=None):
         with self.app.app_context():
             user = User.query.get(self.user_id)
             if not user:
@@ -118,17 +127,12 @@ class TcpConnectionHandler:
             client_ip = client_addr[0] if client_addr else None
 
             try:
-                result = parse_tcp_data(raw_data)
+                parsed_msg = parse_message(raw_data)
                 parsed = True
+                store_data(user.id, parsed_msg)
 
-                if user.storage_enabled:
-                    self.store_data(user.id, result)
-                
-                # 推送数据到实时数据流
-                notify_realtime_stream(user.id, result)
-                
                 try:
-                    self.check_alarms(user.id, result)
+                    self.check_alarms(user.id, parsed_msg)
                 except Exception as e:
                     logger.error(f"Alarm check error: {e}")
 
@@ -141,11 +145,12 @@ class TcpConnectionHandler:
 
             try:
                 tcp_log = TcpLog(
-                    user_id=user.id,
-                    raw_data=raw_data,
-                    parsed=parsed,
-                    error_msg=error_msg,
-                    client_ip=client_ip
+                    port=user.id,
+                    client_ip=client_ip,
+                    direction='in',
+                    content=raw_data[:2000] if raw_data else '',
+                    status='success' if parsed else 'error',
+                    error_message=error_msg
                 )
                 db.session.add(tcp_log)
                 db.session.commit()
@@ -153,128 +158,102 @@ class TcpConnectionHandler:
                 logger.error(f"Failed to save TCP log: {e}")
                 db.session.rollback()
 
-    def store_data(self, user_id, result):
-        try:
-            device_name = result['device_name']
-            voltage_mv = result['voltage_mv']
 
-            device = Device.query.filter_by(user_id=user_id, name=device_name).first()
-            if not device:
-                device = Device(
-                    user_id=user_id,
-                    name=device_name,
-                    voltage_mv=voltage_mv,
-                    is_online=True,
-                    last_seen_at=datetime.utcnow()
+def store_data(user_id, parsed):
+    try:
+        device_info = parsed['device']
+        device_name = device_info['name']
+        # 兼容两种电压字段
+        voltage = device_info.get('voltage')
+        if voltage is None:
+            voltage_mv = device_info.get('voltage_mv', 0)
+            voltage = round(voltage_mv / 1000.0, 2) if voltage_mv else 0.0
+        else:
+            voltage = float(voltage)
+        now = datetime.utcnow()
+
+        device = Device.query.filter_by(user_id=user_id, name=device_name).first()
+        if not device:
+            device = Device(
+                user_id=user_id,
+                name=device_name,
+                voltage=voltage,
+                is_online=True,
+                last_seen=now,
+                first_seen=now
+            )
+            db.session.add(device)
+            db.session.flush()
+        else:
+            device.voltage = voltage
+            device.is_online = True
+            device.last_seen = now
+
+        for ch_info in parsed['channels']:
+            ch_name = ch_info['name']
+            ch_online = ch_info['online']
+
+            channel = Channel.query.filter_by(device_id=device.id, name=ch_name).first()
+            if not channel:
+                channel = Channel(
+                    device_id=device.id,
+                    name=ch_name,
+                    is_online=ch_online,
+                    first_seen=now,
+                    last_seen=now
                 )
-                db.session.add(device)
+                db.session.add(channel)
                 db.session.flush()
             else:
-                if voltage_mv is not None:
-                    device.voltage_mv = voltage_mv
-                device.is_online = True
-                device.last_seen_at = datetime.utcnow()
+                channel.is_online = ch_online
+                channel.last_seen = now
 
-            for ch in result['channels']:
-                channel = SlaveChannel.query.filter_by(device_id=device.id, name=ch['name']).first()
-                if not channel:
-                    channel = SlaveChannel(
-                        device_id=device.id,
-                        name=ch['name'],
-                        online=ch['online'],
-                        last_data_at=datetime.utcnow()
-                    )
-                    db.session.add(channel)
-                    db.session.flush()
-                else:
-                    channel.online = ch['online']
-                    channel.last_data_at = datetime.utcnow()
-
-                for dp in ch['data_points']:
-                    data_point = DataPoint(
-                        channel_id=channel.id,
-                        name=dp['name'],
-                        value=dp['value']
-                    )
-                    db.session.add(data_point)
-
-            db.session.commit()
-            
-            # 更新统计
-            with _tcp_stats_lock:
-                _tcp_stats['total_messages'] += 1
-                _tcp_stats['last_activity'] = datetime.utcnow()
-            
-            logger.info(f"Stored data for user {user_id}, device {device_name}")
-            
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Failed to store data for user {user_id}: {e}", exc_info=True)
-            raise
-
-    def check_alarms(self, user_id, result):
-        rules = AlarmRule.query.filter_by(user_id=user_id, enabled=True).all()
-        if not rules:
-            return
-
-        device_name = result['device_name']
-        records_to_create = []
-        notifications = []
-
-        for ch in result['channels']:
-            channel_name = ch['name']
-            for dp in ch['data_points']:
-                point_name = dp['name']
-                value = dp['value']
-                for rule in rules:
-                    if (rule.device_name == device_name and
-                            rule.channel_name == channel_name and
-                            rule.point_name == point_name):
-                        triggered = False
-                        if rule.condition == 'gt' and value > rule.threshold:
-                            triggered = True
-                        elif rule.condition == 'lt' and value < rule.threshold:
-                            triggered = True
-                        elif rule.condition == 'eq' and value == rule.threshold:
-                            triggered = True
-
-                        if triggered:
-                            message = (
-                                f"Alarm: {device_name}/{channel_name}/{point_name} = {value} "
-                                f"({rule.condition} {rule.threshold})"
-                            )
-                            record = AlarmRecord(
-                                user_id=user_id,
-                                rule_id=rule.id,
-                                device_name=device_name,
-                                channel_name=channel_name,
-                                point_name=point_name,
-                                value=value,
-                                threshold=rule.threshold,
-                                condition=rule.condition,
-                                message=message
-                            )
-                            records_to_create.append(record)
-                            notifications.append({
-                                'type': 'alarm',
-                                'user_id': user_id,
-                                'device_name': device_name,
-                                'channel_name': channel_name,
-                                'point_name': point_name,
-                                'value': value,
-                                'threshold': rule.threshold,
-                                'condition': rule.condition,
-                                'message': message,
-                                'timestamp': datetime.utcnow().isoformat()
-                            })
-                            logger.warning(message)
-
-        if records_to_create:
-            for record in records_to_create:
-                db.session.add(record)
-            db.session.commit()
-            for notification in notifications:
+            for dp_name, dp_value in ch_info['data_points'].items():
                 try:
-                    push_to_user(notification.get('user_id', user_id), notification)
-                except Exception as e:
-                    logger.error(f"SSE推送失败: {e}")
+                    val = float(dp_value)
+                except (TypeError, ValueError):
+                    continue
+
+                dp = DataPoint.query.filter_by(
+                    channel_id=channel.id, name=dp_name
+                ).first()
+                if not dp:
+                    dp = DataPoint(
+                        channel_id=channel.id,
+                        name=dp_name,
+                        value=val,
+                        last_value=0.0,
+                        last_updated=now,
+                        update_count=1
+                    )
+                    db.session.add(dp)
+                else:
+                    dp.last_value = dp.value
+                    dp.value = val
+                    dp.last_updated = now
+                    dp.update_count = (dp.update_count or 0) + 1
+
+                hist = DataHistory(
+                    data_point_id=dp.id,
+                    device_id=device.id,
+                    channel_id=channel.id,
+                    value=val,
+                    timestamp=now
+                )
+                db.session.add(hist)
+
+        db.session.commit()
+
+        with _tcp_stats_lock:
+            _tcp_stats['total_messages'] += 1
+            _tcp_stats['last_activity'] = datetime.utcnow()
+
+        logger.info(f"Stored data for user {user_id}, device {device_name}")
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to store data for user {user_id}: {e}", exc_info=True)
+        raise
+
+
+import asyncio

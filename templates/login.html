@@ -2,7 +2,7 @@
 
 {% set hide_nav = true %}
 
-{% block title %}登录 - IoT Data Platform{% endblock %}
+{% block title %}登录 - 遵义流量计采集测试{% endblock %}
 
 {% block content %}
 <div class="login-page">
@@ -10,8 +10,8 @@
         <div class="card-body">
             <div class="login-logo">
                 <i class="bi bi-cpu"></i>
-                <h4 class="mt-2 mb-0">IoT Data Platform</h4>
-                <p class="text-muted mb-0">物联网数据可视化平台</p>
+                <h4 class="mt-2 mb-0">遵义流量计采集测试</h4>
+                <p class="text-muted mb-0">流量计数据采集与监控平台</p>
             </div>
             <form method="POST" action="{{ url_for('pages.login') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

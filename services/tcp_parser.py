@@ -1,15 +1,8 @@
 """
-TCP 数据解析器 - 解析用户指定的报文格式
-报文示例:
-{
-  "device": {"name": "Collector-1", "voltage_mv": 3037},
-  "s1": {"name": "Slave-1", "online": 1, "data": {"Data-1": 0.0000}}
-}
+TCP 数据解析器 - 解析设备上报的 JSON 报文
 """
 import json
 import logging
-from datetime import datetime
-from models.database import db, Device, Channel, DataPoint
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +15,8 @@ class TcpParseError(Exception):
 def parse_message(raw: str) -> dict:
     """
     解析 TCP 报文
-    返回: {device: {name, voltage_mv}, channels: [{name, online, data_points: {name: value}}]}
-    抛 TcpParseError
+    支持两种电压字段: voltage (V) 或 voltage_mv (mV)
+    返回: {device: {name, voltage}, channels: [{name, online, data_points: [{name, value}]}]}
     """
     try:
         msg = json.loads(raw)
@@ -33,7 +26,6 @@ def parse_message(raw: str) -> dict:
     if not isinstance(msg, dict):
         raise TcpParseError("报文必须是 JSON 对象")
 
-    # device 字段是必须的
     device_info = msg.get('device')
     if not device_info or not isinstance(device_info, dict):
         raise TcpParseError("缺少 'device' 字段")
@@ -42,28 +34,39 @@ def parse_message(raw: str) -> dict:
     if not device_name:
         raise TcpParseError("device.name 字段不能为空")
 
-    voltage_mv = device_info.get('voltage_mv')
+    # 兼容两种电压字段
+    voltage = device_info.get('voltage')
+    if voltage is None:
+        voltage_mv = device_info.get('voltage_mv', 0)
+        voltage = round(voltage_mv / 1000.0, 2) if voltage_mv else 0.0
+    else:
+        voltage = float(voltage)
 
-    # 找所有通道 (s1, s2, ... 或者任何非 device 字段)
     channels = []
     for key, val in msg.items():
         if key == 'device':
             continue
         if not isinstance(val, dict):
             continue
+
         ch_name = val.get('name', key)
         online = val.get('online', 1)
         if isinstance(online, str):
-            online = 1 if online.lower() in ('1', 'true', 'online', 'yes') else 0
-        data_points = val.get('data', {})
-        if not isinstance(data_points, dict):
-            data_points = {}
-        # 也兼容 val 里的其他数值字段
+            online = 1 if online.lower() in ('1', 'true', 'online') else 0
+
+        data_dict = val.get('data', {})
+        if not isinstance(data_dict, dict):
+            data_dict = {}
+
+        # 兼容通道内的其他数值字段
         for k, v in list(val.items()):
             if k in ('name', 'online', 'data'):
                 continue
             if isinstance(v, (int, float)):
-                data_points[k] = v
+                data_dict[k] = v
+
+        data_points = [{'name': k, 'value': float(v) if v is not None else 0.0}
+                       for k, v in data_dict.items()]
 
         channels.append({
             'name': ch_name,
@@ -72,41 +75,58 @@ def parse_message(raw: str) -> dict:
         })
 
     return {
-        'device': {'name': device_name, 'voltage_mv': voltage_mv},
+        'device': {'name': device_name, 'voltage': voltage},
         'channels': channels
     }
 
 
-def store_data(parsed: dict) -> dict:
+def store_data(parsed: dict, user_id: int = None) -> dict:
     """
     存储解析后的数据到数据库
-    返回: {device_id, channel_count, data_point_count}
+    返回: {device_id, device_name, channel_count, data_point_count}
     """
+    from datetime import datetime
+    from models.database import db, Device, Channel, DataPoint, DataHistory, User
+
     device_info = parsed['device']
     device_name = device_info['name']
-    voltage_mv = device_info.get('voltage_mv')
+    voltage = device_info.get('voltage', 0.0)
 
-    now = datetime.now()
+    now = datetime.utcnow()
 
-    # 1) 创建设备
-    device = Device.query.filter_by(name=device_name).first()
+    # 查找设备
+    if user_id:
+        device = Device.query.filter_by(user_id=user_id, name=device_name).first()
+    else:
+        device = Device.query.filter_by(name=device_name).first()
+
     if not device:
+        # 找到 owner
+        if user_id:
+            owner_id = user_id
+        else:
+            owner = User.query.filter_by(is_admin=True).order_by(User.id).first()
+            if not owner:
+                owner = User.query.order_by(User.id).first()
+            owner_id = owner.id if owner else 1
+
         device = Device(
+            user_id=owner_id,
             name=device_name,
-            voltage_mv=voltage_mv,
+            voltage=voltage,
             is_online=True,
             first_seen=now,
             last_seen=now
         )
         db.session.add(device)
-        db.session.flush()  # 拿到 device.id
     else:
         device.is_online = True
         device.last_seen = now
-        if voltage_mv is not None:
-            device.voltage_mv = voltage_mv
+        device.voltage = voltage
+        device.total_packets = (device.total_packets or 0) + 1
+    db.session.flush()
 
-    # 2) 遍历通道
+    # 遍历通道
     channel_count = 0
     dp_count = 0
     channel_ids = []
@@ -125,30 +145,52 @@ def store_data(parsed: dict) -> dict:
                 last_seen=now
             )
             db.session.add(channel)
-            db.session.flush()
         else:
             channel.is_online = ch_online
             channel.last_seen = now
+        db.session.flush()
 
         channel_count += 1
         channel_ids.append(channel.id)
 
-        # 3) 写数据点
-        for dp_name, dp_value in ch_info['data_points'].items():
-            try:
-                value = float(dp_value)
-            except (TypeError, ValueError):
-                continue
-            dp = DataPoint(
+        # 写数据点
+        for dp_info in ch_info['data_points']:
+            dp_name = dp_info['name']
+            dp_value = dp_info['value']
+
+            dp = DataPoint.query.filter_by(
+                channel_id=channel.id, name=dp_name
+            ).first()
+
+            if dp:
+                dp.last_value = dp.value
+                dp.value = dp_value
+                dp.last_updated = now
+                dp.update_count = (dp.update_count or 0) + 1
+            else:
+                dp = DataPoint(
+                    channel_id=channel.id,
+                    name=dp_name,
+                    value=dp_value,
+                    last_value=0.0,
+                    last_updated=now,
+                    update_count=1
+                )
+                db.session.add(dp)
+            db.session.flush()
+
+            # 写入历史
+            hist = DataHistory(
+                data_point_id=dp.id,
+                device_id=device.id,
                 channel_id=channel.id,
-                name=dp_name,
-                value=value,
+                value=dp_value,
                 timestamp=now
             )
-            db.session.add(dp)
+            db.session.add(hist)
             dp_count += 1
 
-    # 4) 把离线通道(没在本次报文中出现的) 标记为离线
+    # 标记离线通道
     if channel_ids:
         offline_channels = Channel.query.filter(
             Channel.device_id == device.id,
@@ -167,7 +209,7 @@ def store_data(parsed: dict) -> dict:
     }
 
 
-def parse_and_store(raw: str) -> dict:
-    """解析并存储,异常抛 TcpParseError"""
+def parse_and_store(raw: str, user_id: int = None) -> dict:
+    """解析并存储"""
     parsed = parse_message(raw)
-    return store_data(parsed)
+    return store_data(parsed, user_id)

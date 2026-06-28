@@ -39,7 +39,7 @@ def create_app(config_name=None):
     csrf.init_app(app)
 
     # 登录管理器配置
-    login_manager.login_view = 'auth.login'
+    login_manager.login_view = 'pages.login'
     login_manager.login_message = '请先登录'
     login_manager.login_message_category = 'warning'
 
@@ -107,23 +107,73 @@ def create_app(config_name=None):
 
     # 创建数据库表
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+            print("=" * 60)
+            print("Database initialized successfully")
+            print(f"Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', '').split('@')[-1] if '@' in app.config.get('SQLALCHEMY_DATABASE_URI', '') else 'SQLite'}")
+            print("=" * 60)
+        except Exception as e:
+            print("=" * 60)
+            print(f"Database connection failed: {e}")
+            print("=" * 60)
+            # 如果 MySQL 失败，尝试回退到 SQLite
+            if 'mysql' in str(app.config.get('SQLALCHEMY_DATABASE_URI', '')).lower():
+                print("Attempting to fall back to SQLite...")
+                instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+                sqlite_path = os.path.join(instance_path, 'database.db')
+                app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{sqlite_path}'
+                db.init_app(app)
+                try:
+                    db.create_all()
+                    print(f"Successfully fell back to SQLite: {sqlite_path}")
+                    print("=" * 60)
+                except Exception as sqlite_err:
+                    print(f"SQLite fallback also failed: {sqlite_err}")
+                    print("=" * 60)
+                    raise
 
-        # 自动迁移: 补全缺失列(防止生产 MySQL 与模型不同步)
-        # 关键:把结果直接打印到 stdout,你重启时能直接看到
+        # 自动迁移: 补全缺失列
         print("=" * 60)
-        print("🔧 [数据库迁移 v2] 模型自动扫描模式 ...")
+        print("[Database Migration] Checking for missing columns...")
         print("=" * 60)
         try:
-            from migrate_db import auto_migrate
-            auto_migrate()
+            from migrate_db import EXPECTED_COLUMNS, get_existing_columns, get_all_tables, add_column
+            with db.engine.connect() as conn:
+                existing_tables = get_all_tables(conn)
+                total_added = 0
+                total_failed = 0
+                for table, columns in EXPECTED_COLUMNS.items():
+                    if table not in existing_tables:
+                        print(f"   Skip {table} (table not exists)")
+                        continue
+                    existing = get_existing_columns(conn, table)
+                    for col_name, col_def in columns:
+                        if col_name in existing:
+                            continue
+                        print(f"   Adding {table}.{col_name} ...", end=' ', flush=True)
+                        result = add_column(conn, table, col_name, col_def)
+                        if result is True:
+                            print("OK")
+                            total_added += 1
+                        else:
+                            print(f"Failed: {result}")
+                            total_failed += 1
+                print("=" * 60)
+                if total_failed == 0 and total_added == 0:
+                    print("[Database Migration] Schema is up to date")
+                elif total_failed == 0:
+                    print(f"[Database Migration] Added {total_added} columns")
+                else:
+                    print(f"[Database Migration] Added {total_added}, Failed {total_failed}")
+                    print("Please run migration_manual.sql manually or contact DBA")
+                print("=" * 60)
         except Exception as e:
             import traceback
-            print(f"❌ [数据库迁移] 异常: {e}")
+            print(f"[Database Migration] Error: {e}")
             traceback.print_exc()
             print("=" * 60)
-            print("⚠️  迁移失败不影响应用启动,但部分查询可能报错")
-            print("⚠️  请参考 migration_manual.sql 手动执行")
+            print("Migration failed, but app can still start")
             print("=" * 60)
 
         # 启动 TCP 服务

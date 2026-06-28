@@ -71,12 +71,19 @@ def list_data():
         rows = q.order_by(desc(DataHistory.timestamp))\
             .offset((page - 1) * page_size).limit(page_size).all()
 
-        # 关联取设备名/通道名/数据点名
+        dp_ids = list({r.data_point_id for r in rows if r.data_point_id})
+        ch_ids = list({r.channel_id for r in rows if r.channel_id})
+        dev_ids = list({r.device_id for r in rows if r.device_id})
+
+        dp_map = {dp.id: dp for dp in DataPoint.query.filter(DataPoint.id.in_(dp_ids)).all()} if dp_ids else {}
+        ch_map = {ch.id: ch for ch in Channel.query.filter(Channel.id.in_(ch_ids)).all()} if ch_ids else {}
+        dev_map = {d.id: d for d in Device.query.filter(Device.id.in_(dev_ids)).all()} if dev_ids else {}
+
         result = []
         for r in rows:
-            dp = DataPoint.query.get(r.data_point_id)
-            ch = Channel.query.get(r.channel_id) if r.channel_id else None
-            dev = Device.query.get(r.device_id) if r.device_id else None
+            dp = dp_map.get(r.data_point_id)
+            ch = ch_map.get(r.channel_id)
+            dev = dev_map.get(r.device_id)
             result.append({
                 'id': r.id,
                 'timestamp': r.timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.timestamp else None,

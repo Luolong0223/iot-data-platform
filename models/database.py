@@ -24,6 +24,8 @@ class User(UserMixin, db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+    last_login_ip = db.Column(db.String(45), nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -39,7 +41,9 @@ class User(UserMixin, db.Model):
             'is_active': self.is_active,
             'is_admin': self.is_admin,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else None,
-            'last_login': self.last_login.strftime('%Y-%m-%d %H:%M') if self.last_login else None
+            'last_login': self.last_login.strftime('%Y-%m-%d %H:%M') if self.last_login else None,
+            'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
+            'last_login_ip': self.last_login_ip
         }
 
 
@@ -77,14 +81,14 @@ class DeviceCategory(db.Model):
 class Device(db.Model):
     """设备表
     TCP 报文 device.name 字段对应此表的 name 字段
-    voltage_mv 字段存储设备当前电压
+    voltage 字段存储设备当前电压(伏特V)
     """
     __tablename__ = 'devices'
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, index=True)
     custom_name = db.Column(db.String(100), nullable=True)  # 用户自定义名称
-    voltage_mv = db.Column(db.Integer, default=0)  # 电压(mV)
+    voltage = db.Column(db.Float, default=0.0)  # 电压(V)，保留两位小数
 
     category_id = db.Column(db.Integer, db.ForeignKey('device_categories.id', ondelete='SET NULL'), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
@@ -102,12 +106,12 @@ class Device(db.Model):
             'name': self.name,
             'custom_name': self.custom_name or self.name,
             'display_name': self.custom_name or self.name,
-            'voltage_mv': self.voltage_mv,
+            'voltage': self.voltage,
             'category_id': self.category_id,
             'category_name': self.category.name if self.category else None,
             'is_online': self.is_online,
-            'last_seen': self.last_seen.strftime('%Y-%m-%d %H:%M:%S') if self.last_seen else None,
-            'first_seen': self.first_seen.strftime('%Y-%m-%d %H:%M:%S') if self.first_seen else None,
+            'last_seen': self.last_seen.strftime('%Y-%m-%dT%H:%M:%SZ') if self.last_seen else None,
+            'first_seen': self.first_seen.strftime('%Y-%m-%dT%H:%M:%SZ') if self.first_seen else None,
             'total_packets': self.total_packets,
             'channel_count': self.channels.count()
         }
@@ -142,7 +146,7 @@ class Channel(db.Model):
             'device_id': self.device_id,
             'name': self.name,
             'is_online': self.is_online,
-            'last_seen': self.last_seen.strftime('%Y-%m-%d %H:%M:%S') if self.last_seen else None,
+            'last_seen': self.last_seen.strftime('%Y-%m-%dT%H:%M:%SZ') if self.last_seen else None,
             'data_point_count': self.data_points.count()
         }
         if with_data_points:
@@ -233,10 +237,17 @@ class DashboardWidget(db.Model):
             'data_point_id': self.data_point_id,
             'data_point_name': dp.name if dp else '?',
             'current_value': dp.value if dp else 0,
-            'last_updated': dp.last_updated.strftime('%Y-%m-%d %H:%M:%S') if dp and dp.last_updated else None,
+            'last_updated': dp.last_updated.strftime('%Y-%m-%dT%H:%M:%SZ') if dp and dp.last_updated else None,
             'sort_order': self.sort_order,
             'is_visible': self.is_visible,
-            'color': self.color
+            'color': self.color,
+            # 前端兼容字段 (前后端契约)
+            'widget_id': self.id,
+            'device_online': dev.is_online if dev else False,
+            'device_voltage': dev.voltage if dev else None,
+            'value': dp.value if dp else None,
+            'timestamp': dp.last_updated.strftime('%Y-%m-%dT%H:%M:%SZ') if dp and dp.last_updated else None,
+            'unit': ''
         }
 
 

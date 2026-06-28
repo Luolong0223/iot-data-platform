@@ -72,7 +72,7 @@ def get_available_points():
                 'name': d.name,
                 'display_name': d.custom_name or d.name,
                 'is_online': d.is_online,
-                'voltage_mv': d.voltage_mv,
+                'voltage': d.voltage,
                 'channels': []
             }
             for ch in d.channels:

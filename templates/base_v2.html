@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% block title %}IoT Data Platform{% endblock %}</title>
+    <title>{% block title %}遵义流量计采集测试{% endblock %}</title>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,7 +29,7 @@
             <div class="sidebar-header">
                 <a href="{{ url_for('pages.dashboard') }}" class="sidebar-brand">
                     <i class="bi bi-cpu-fill brand-icon"></i>
-                    <span class="brand-text">IoT Platform</span>
+                    <span class="brand-text">遵义流量计采集测试</span>
                 </a>
                 <button class="sidebar-toggle d-lg-none" id="sidebarToggle">
                     <i class="bi bi-x-lg"></i>
@@ -45,7 +45,7 @@
                     <li class="nav-item">
                         <a href="{{ url_for('pages.dashboard') }}" class="nav-link {% if request.endpoint == 'pages.dashboard' %}active{% endif %}">
                             <i class="nav-icon bi bi-speedometer2"></i>
-                            <span>仪表盘</span>
+                            <span>数据展示</span>
                             <span class="nav-badge badge bg-primary" id="dashboardBadge" style="display:none;"></span>
                         </a>
                     </li>
@@ -123,7 +123,7 @@
                         <ol class="breadcrumb mb-0">
                             {% block breadcrumb %}
                             <li class="breadcrumb-item"><a href="{{ url_for('pages.dashboard') }}">首页</a></li>
-                            <li class="breadcrumb-item active">{% block page_title %}仪表盘{% endblock %}</li>
+                            <li class="breadcrumb-item active">{% block page_title %}数据展示{% endblock %}</li>
                             {% endblock %}
                         </ol>
                     </nav>

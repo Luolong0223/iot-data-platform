@@ -472,7 +472,7 @@ a:hover {
 .page-content {
     flex: 1;
     padding: 24px;
-    max-width: 1600px;
+    /* max-width: 1600px; */
     width: 100%;
 }
 

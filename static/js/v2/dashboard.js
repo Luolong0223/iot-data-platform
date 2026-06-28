@@ -1,5 +1,5 @@
 /**
- * 仪表盘 JS
+ * 数据展示 JS
  * 功能: 展示用户选择的数据点, 实时刷新
  */
 (function() {
@@ -18,12 +18,12 @@
         console.log('Dashboard initialized');
     });
 
-    // ================= 加载仪表盘数据 =================
+    // ================= 加载数据 =================
     async function loadDashboard() {
         try {
             const r = await apiRequest('/api/dashboard/data');
             if (!r.success) {
-                console.error('加载仪表盘失败', r);
+                console.error('加载数据失败', r);
                 return;
             }
             renderDashboard(r.data);
@@ -32,7 +32,7 @@
         }
     }
 
-    // ================= 渲染仪表盘 =================
+    // ================= 渲染数据展示 =================
     function renderDashboard(data) {
         // 汇总卡片
         const summary = data.summary || {};
@@ -110,8 +110,8 @@
                                 <i class="bi bi-circle-fill" style="font-size:0.5rem;"></i> ${onlineText}
                             </span>
                             <span class="text-muted ms-2">${lastTime}</span>
-                            ${w.device_voltage_mv !== null && w.device_voltage_mv !== undefined ?
-                                `<span class="text-muted ms-2"><i class="bi bi-lightning"></i> ${w.device_voltage_mv} mV</span>` : ''}
+                            ${w.device_voltage !== null && w.device_voltage !== undefined ?
+                                `<span class="text-muted ms-2"><i class="bi bi-lightning"></i> ${w.device_voltage} V</span>` : ''}
                         </div>
                     </div>
                 </div>
@@ -119,7 +119,7 @@
 
             // 删除按钮
             col.querySelector('.widget-remove').addEventListener('click', () => {
-                if (confirm('确定从仪表盘移除该数据点吗?')) {
+                if (confirm('确定从数据展示移除该数据点吗?')) {
                     removeWidget(w.widget_id);
                 }
             });
@@ -182,7 +182,7 @@
                         <strong>${escapeHtml(d.display_name || d.name)}</strong>
                         <span class="text-muted small ms-2">(${escapeHtml(d.name)})</span>
                         <span class="badge bg-${d.is_online ? 'success' : 'secondary'} ms-2" style="font-size:0.6rem;">${d.is_online ? '在线' : '离线'}</span>
-                        ${d.voltage_mv ? `<span class="text-muted small ms-2">${d.voltage_mv} mV</span>` : ''}
+                        ${d.voltage ? `<span class="text-muted small ms-2">${d.voltage} V</span>` : ''}
                     </div>
                     ${channelHtml}
                 </div>

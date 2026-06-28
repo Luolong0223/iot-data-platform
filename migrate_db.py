@@ -1,171 +1,195 @@
 """
-数据库迁移脚本 v2 - 模型自动扫描
-从 SQLAlchemy 模型自动发现所有列,与现有数据库对比,补全缺失列。
+数据库迁移脚本 - 自动同步 SQLAlchemy 模型和现有数据库
+用于修复"Unknown column xxx in field list"问题
 
 使用: python migrate_db.py
-或: 在 create_app() 中自动调用
 """
 import sys
 import os
 from sqlalchemy import inspect, text
 
+# 配置环境变量 (与 .env 或实际部署一致)
 os.environ.setdefault('DATABASE_URL', 'sqlite:///iot_platform.db')
 
 from app import create_app
 from models.database import db
 
-
-def is_sqlite():
-    return 'sqlite' in str(db.engine.url).lower()
+# 期望添加的列 (基于真实模型 models/database.py)
+# 格式: {表名: [(列名, 列定义), ...]}
+# 重要:列定义必须与模型中 db.Column 的类型严格匹配
+EXPECTED_COLUMNS = {
+    'users': [
+        # 模型字段: id, username, email, password_hash, is_active, is_admin, created_at, last_login
+        ('last_login', 'DATETIME NULL'),
+        ('last_login_at', 'DATETIME NULL'),
+        ('last_login_ip', 'VARCHAR(45) NULL'),
+    ],
+    'devices': [
+        # 模型字段: id, name, custom_name, voltage_mv, category_id, user_id, is_online, last_seen, first_seen, total_packets
+        ('last_seen', 'DATETIME NULL'),
+    ],
+    'channels': [
+        # 模型字段: id, device_id, name, is_online, last_seen, first_seen
+        ('last_seen', 'DATETIME NULL'),
+    ],
+    'data_points': [
+        # 模型字段: id, channel_id, name, value, last_value, last_updated, update_count
+        ('last_value', 'FLOAT DEFAULT 0.0'),
+        ('last_updated', 'DATETIME NULL'),
+        ('update_count', 'INT DEFAULT 0'),
+    ],
+    'data_history': [
+        # 模型字段: id, data_point_id, device_id, channel_id, value, timestamp
+        # 全部已在基础表中
+    ],
+    'dashboard_widgets': [
+        # 模型字段: id, user_id, device_id, channel_id, data_point_id, sort_order, is_visible, color, created_at
+        # 全部已在基础表中
+    ],
+    'tcp_server_configs': [
+        # 模型字段: id, name, port, host, is_active, description, created_at, last_started, total_connections, total_messages, error_count
+        ('last_started', 'DATETIME NULL'),
+        ('total_connections', 'INT DEFAULT 0'),
+        ('total_messages', 'INT DEFAULT 0'),
+        ('error_count', 'INT DEFAULT 0'),
+    ],
+    'tcp_logs': [
+        # 模型字段: id, port, client_ip, direction, content, status, error_message, timestamp
+        # 全部已在基础表中
+    ],
+    'system_configs': [
+        # 模型字段: id, key, value, description, updated_at
+        # 全部已在基础表中
+    ],
+    'login_logs': [
+        # 模型字段: id, user_id, username, ip, user_agent, status, timestamp
+        ('ip', 'VARCHAR(50) NULL'),
+        ('user_agent', 'VARCHAR(255) NULL'),
+    ],
+}
 
 
 def get_existing_columns(conn, table_name):
     """获取表的现有列"""
+    inspector = inspect(conn)
     try:
-        cols = inspect(conn).get_columns(table_name)
+        cols = inspector.get_columns(table_name)
         return {c['name'] for c in cols}
     except Exception:
         return set()
 
 
 def get_all_tables(conn):
-    return set(inspect(conn).get_table_names())
+    """获取所有表"""
+    inspector = inspect(conn)
+    return set(inspector.get_table_names())
 
 
-def get_model_columns(model_class):
-    """从 SQLAlchemy 模型中提取所有列名"""
-    return {c.name for c in model_class.__table__.columns}
+def is_sqlite():
+    """检测是否为 SQLite"""
+    return 'sqlite' in str(db.engine.url).lower()
 
 
-def col_definition(col):
-    """从 SQLAlchemy Column 对象生成 MySQL 列定义字符串"""
-    col_type = col.type
-    type_name = type(col_type).__name__.upper()
-
-    # 类型映射
-    type_map = {
-        'INTEGER': 'INT',
-        'BIGINTEGER': 'BIGINT',
-        'SMALLINTEGER': 'SMALLINT',
-        'STRING': f'VARCHAR({col_type.length})' if col_type.length else 'VARCHAR(255)',
-        'TEXT': 'TEXT',
-        'FLOAT': 'FLOAT',
-        'NUMERIC': 'DECIMAL',
-        'BOOLEAN': 'TINYINT(1)',
-        'DATETIME': 'DATETIME',
-        'DATE': 'DATE',
-        'TIME': 'TIME',
-        'JSON': 'JSON',
-    }
-    sql_type = type_map.get(type_name, 'VARCHAR(255)')
-
-    # 默认值
-    default = ''
-    if col.default is not None and col.default.arg is not None:
-        val = col.default.arg
-        if isinstance(val, str):
-            default = f" DEFAULT '{val}'"
-        elif isinstance(val, bool):
-            default = f" DEFAULT {1 if val else 0}"
-        elif val is not None:
-            default = f" DEFAULT {val}"
-    elif col.nullable:
-        default = ''  # NULL 列不需要显式 default
+def add_column(conn, table, col_name, col_def):
+    """添加列(兼容 SQLite 和 MySQL) - SQLAlchemy 2.0 auto-commit"""
+    if is_sqlite():
+        sql = f"ALTER TABLE {table} ADD COLUMN {col_name} NULL"
     else:
-        # NOT NULL 但没默认值 - 给他一个安全默认值防止 INSERT 失败
-        if 'INT' in sql_type:
-            default = ' DEFAULT 0'
-        elif 'VARCHAR' in sql_type or 'TEXT' in sql_type:
-            default = " DEFAULT ''"
-        elif 'FLOAT' in sql_type or 'DOUBLE' in sql_type or 'DECIMAL' in sql_type:
-            default = ' DEFAULT 0.0'
-        elif 'TINYINT' in sql_type:
-            default = ' DEFAULT 0'
-        elif 'DATETIME' in sql_type:
-            default = ' NULL'
-
-    nullable = 'NULL' if col.nullable else 'NOT NULL'
-    return f"{sql_type}{default} {nullable}"
+        sql = f"ALTER TABLE `{table}` ADD COLUMN `{col_name}` {col_def}"
+    try:
+        # SQLAlchemy 2.0: db.engine.connect() 自动开启事务,执行后自动 commit
+        conn.execute(text(sql))
+        conn.commit()
+        return True
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return f"失败: {e}"
 
 
-def auto_migrate():
-    """从模型自动发现所有列,与数据库对比,补全缺失列"""
-    print('=' * 60)
-    print('🔧 [数据库迁移] v2 - 模型自动扫描模式')
-    print('=' * 60)
+def create_table_if_missing(conn, table, model_class):
+    """如果表不存在,使用模型创建"""
+    inspector = inspect(conn)
+    if table not in inspector.get_table_names():
+        try:
+            model_class.__table__.create(db.engine)
+            return f"✅ 创建表 {table}"
+        except Exception as e:
+            return f"❌ 创建表 {table} 失败: {e}"
+    return None
 
-    from models.database import db
-    # 收集所有模型类
-    models = []
-    for cls in db.Model.__subclasses__():
-        models.append(cls)
-    # 包含 db.Model 自身
-    if db.Model not in models:
-        for cls in db.Model.__subclasses__():
-            for sub in cls.__subclasses__():
-                if sub not in models:
-                    models.append(sub)
 
-    print(f'📋 发现 {len(models)} 个模型: {[m.__tablename__ for m in models if hasattr(m, "__tablename__")]}\n')
+def main():
+    print("=" * 60)
+    print("📦 数据库迁移工具")
+    print("=" * 60)
 
-    total_added = 0
-    total_failed = 0
+    app = create_app()
+    with app.app_context():
+        print(f"\n🔗 数据库: {db.engine.url}\n")
 
-    with db.engine.connect() as conn:
-        existing_tables = get_all_tables(conn)
+        with db.engine.connect() as conn:
+            existing_tables = get_all_tables(conn)
+            print(f"📊 现有表: {len(existing_tables)}")
+            for t in sorted(existing_tables):
+                print(f"   - {t}")
+            print()
 
-        for model in models:
-            table_name = getattr(model, '__tablename__', None)
-            if not table_name:
-                continue
+            # 1. 创建所有缺失的表
+            print("=" * 60)
+            print("🏗️  创建缺失的表")
+            print("=" * 60)
+            from models.database import (
+                User, Device, Channel, DataPoint, DataHistory,
+                DeviceCategory, DashboardWidget, TcpServerConfig,
+                TcpLog, SystemConfig, LoginLog
+            )
+            all_models = [
+                ('users', User), ('devices', Device), ('channels', Channel),
+                ('data_points', DataPoint), ('data_history', DataHistory),
+                ('device_categories', DeviceCategory),
+                ('dashboard_widgets', DashboardWidget),
+                ('tcp_server_configs', TcpServerConfig), ('tcp_logs', TcpLog),
+                ('system_configs', SystemConfig), ('login_logs', LoginLog),
+            ]
+            for table_name, model_cls in all_models:
+                result = create_table_if_missing(conn, table_name, model_cls)
+                if result:
+                    print(f"   {result}")
 
-            if table_name not in existing_tables:
-                print(f'⏭️  表 {table_name} 不存在,跳过 (db.create_all() 会创建)')
-                continue
+            # 2. 添加缺失的列
+            print("\n" + "=" * 60)
+            print("🔧 添加缺失的列")
+            print("=" * 60)
+            total_added = 0
+            for table, columns in EXPECTED_COLUMNS.items():
+                if table not in existing_tables and table not in {t for t in get_all_tables(conn)}:
+                    print(f"⏭️  跳过 {table} (表不存在,需先创建)")
+                    continue
+                existing = get_existing_columns(conn, table)
+                for col_name, col_def in columns:
+                    if col_name in existing:
+                        continue
+                    print(f"   ➕ {table}.{col_name} ({col_def})... ", end='')
+                    result = add_column(conn, table, col_name, col_def)
+                    if result is True:
+                        print("✅")
+                        total_added += 1
+                    else:
+                        print(f"⚠️  {result}")
 
-            existing_cols = get_existing_columns(conn, table_name)
-            model_cols = get_model_columns(model)
-            missing_cols = model_cols - existing_cols
-
-            if not missing_cols:
-                print(f'✅ {table_name}: 已同步')
-                continue
-
-            print(f'🔍 {table_name}: 缺少 {len(missing_cols)} 列: {missing_cols}')
-
-            for col_name in missing_cols:
-                col = model.__table__.columns[col_name]
-                col_def = col_definition(col)
-
-                if is_sqlite():
-                    sql = f'ALTER TABLE {table_name} ADD COLUMN {col_name} NULL'
-                else:
-                    sql = f'ALTER TABLE `{table_name}` ADD COLUMN `{col_name}` {col_def}'
-
-                try:
-                    conn.execute(text(sql))
-                    conn.commit()
-                    print(f'   ➕ {col_name} ({col_def}) ... ✅')
-                    total_added += 1
-                except Exception as e:
-                    print(f'   ❌ {col_name} 失败: {str(e)[:100]}')
-                    total_failed += 1
-                    try:
-                        conn.rollback()
-                    except Exception:
-                        pass
-
-    print('\n' + '=' * 60)
-    if total_failed == 0:
-        print(f'✅ [数据库迁移] 完成!新增 {total_added} 列,失败 0')
-    else:
-        print(f'⚠️  [数据库迁移] 新增 {total_added} 列,失败 {total_failed} 列')
-        print('⚠️  失败原因通常是 MySQL 用户缺少 ALTER 权限')
-        print('⚠️  请参考 migration_manual.sql 手动执行,或联系 DBA 授权')
-    print('=' * 60)
+            print("\n" + "=" * 60)
+            print(f"✅ 完成: 新增 {total_added} 个列")
+            print("=" * 60)
 
 
 if __name__ == '__main__':
-    app = create_app()
-    with app.app_context():
-        auto_migrate()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        print(f"\n❌ 迁移失败: {e}")
+        traceback.print_exc()
+        sys.exit(1)

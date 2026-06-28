@@ -143,7 +143,7 @@
                         </div>
                         <div class="col-6">
                             <small class="text-muted">电压</small>
-                            <div class="fw-bold">${device.voltage_mv || '-'} mV</div>
+                            <div class="fw-bold">${device.voltage || '-'} V</div>
                         </div>
                         <div class="col-6">
                             <small class="text-muted">通道</small>

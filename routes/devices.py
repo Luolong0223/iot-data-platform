@@ -198,12 +198,25 @@ def build_category_tree(all_cats, parent_id=None):
 
 
 def collect_category_ids(root_id):
-    """收集分类及其所有子分类的 ID"""
+    """收集分类及其所有子分类的 ID（单次查询）"""
     result = [root_id]
+    # 一次性查询所有相关分类
+    all_cats = DeviceCategory.query.filter(
+        DeviceCategory.parent_id.isnot(None)
+    ).all()
+    # 构建 parent_id -> children 的映射
+    children_map = {}
+    for c in all_cats:
+        if c.parent_id not in children_map:
+            children_map[c.parent_id] = []
+        children_map[c.parent_id].append(c.id)
+    
+    # BFS 遍历子分类
     queue = [root_id]
     while queue:
         pid = queue.pop(0)
-        for c in DeviceCategory.query.filter_by(parent_id=pid).all():
-            result.append(c.id)
-            queue.append(c.id)
+        if pid in children_map:
+            for child_id in children_map[pid]:
+                result.append(child_id)
+                queue.append(child_id)
     return result

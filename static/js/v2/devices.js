@@ -140,7 +140,7 @@
                     <td>${escapeHtml(d.name)}</td>
                     <td>${escapeHtml(d.custom_name || '--')}</td>
                     <td>${escapeHtml(d.category_name || '<未分类>')}</td>
-                    <td>${d.voltage_mv !== null && d.voltage_mv !== undefined ? d.voltage_mv : '--'}</td>
+                    <td>${d.voltage !== null && d.voltage !== undefined ? d.voltage + ' V' : '--'}</td>
                     <td>${d.channel_count || 0}</td>
                     <td title="${d.last_seen || ''}">${lastSeen}</td>
                     <td>
@@ -209,7 +209,7 @@
                 </div>
                 <div class="col-md-6">
                     <table class="table table-dark table-borderless table-sm">
-                        <tr><th style="width:120px;">电压</th><td>${d.voltage_mv !== null ? d.voltage_mv + ' mV' : '--'}</td></tr>
+                        <tr><th style="width:120px;">电压</th><td>${d.voltage !== null ? d.voltage + ' V' : '--'}</td></tr>
                         <tr><th>状态</th><td><span class="text-${d.is_online ? 'success' : 'danger'}">${d.is_online ? '在线' : '离线'}</span></td></tr>
                         <tr><th>最后更新</th><td>${d.last_seen || '--'}</td></tr>
                     </table>
