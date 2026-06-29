@@ -285,12 +285,14 @@
     // Format Helpers
     // ========================================
     
-    window.formatNumber = function(num, decimals = 2) {
+    window.formatNumber = function(num, decimals) {
         if (num === null || num === undefined) return '-';
-        return Number(num).toLocaleString('zh-CN', { 
-            minimumFractionDigits: decimals,
-            maximumFractionDigits: decimals 
-        });
+        var n = Number(num);
+        if (isNaN(n)) return String(num);
+        if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+        if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(2) + 'K';
+        var d = decimals !== undefined ? decimals : 4;
+        return n.toFixed(d).replace(/\.?0+$/, '');
     };
     
     window.formatDate = function(dateStr, format = 'datetime') {

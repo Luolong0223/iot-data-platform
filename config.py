@@ -5,14 +5,40 @@ from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
+_SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', '.secret_key')
+
+
+def _load_or_create_secret_key():
+    """加载或自动生成并持久化 SECRET_KEY"""
+    env_key = os.environ.get('SECRET_KEY')
+    if env_key:
+        return env_key
+    try:
+        if os.path.exists(_SECRET_KEY_FILE):
+            with open(_SECRET_KEY_FILE, 'r') as f:
+                key = f.read().strip()
+            if key:
+                return key
+    except Exception:
+        pass
+    key = secrets.token_hex(32)
+    try:
+        os.makedirs(os.path.dirname(_SECRET_KEY_FILE), exist_ok=True)
+        with open(_SECRET_KEY_FILE, 'w') as f:
+            f.write(key)
+        logger.info("Generated and persisted SECRET_KEY to %s", _SECRET_KEY_FILE)
+    except Exception as e:
+        logger.warning("Failed to persist SECRET_KEY: %s", e)
+    return key
+
 
 class Config:
     """基础配置"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+    SECRET_KEY = _load_or_create_secret_key()
     
     # 数据库配置 - 优先读取 DATABASE_URL，否则尝试 MySQL，最后回退到 SQLite
     _db_url = os.environ.get('DATABASE_URL', '')
-    _mysql_password = os.environ.get('MYSQL_PASSWORD', 'cRwLGPScNejLEeBt')
+    _mysql_password = os.environ.get('MYSQL_PASSWORD', '')
     
     if not _db_url:
         if _mysql_password:

@@ -278,12 +278,6 @@
         }[c]));
     }
 
-    function formatNumber(v) {
-        if (typeof v !== 'number') return v;
-        if (Number.isInteger(v)) return v.toString();
-        return v.toFixed(3).replace(/\.?0+$/, '');
-    }
-
     function formatRelativeTime(date) {
         const now = new Date();
         const diff = (now - date) / 1000;

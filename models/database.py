@@ -165,8 +165,8 @@ class DataPoint(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     channel_id = db.Column(db.Integer, db.ForeignKey('channels.id', ondelete='CASCADE'), nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False, index=True)  # 如 Data-1, P1
-    value = db.Column(db.Float, default=0.0)  # 最新值
-    last_value = db.Column(db.Float, default=0.0)  # 上一次值
+    value = db.Column(db.Numeric(20, 4), default=0.0)  # 最新值
+    last_value = db.Column(db.Numeric(20, 4), default=0.0)  # 上一次值
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     update_count = db.Column(db.Integer, default=0)  # 累计更新次数
 
@@ -179,8 +179,8 @@ class DataPoint(db.Model):
             'id': self.id,
             'channel_id': self.channel_id,
             'name': self.name,
-            'value': self.value,
-            'last_value': self.last_value,
+            'value': float(self.value) if self.value is not None else 0.0,
+            'last_value': float(self.last_value) if self.last_value is not None else 0.0,
             'last_updated': self.last_updated.strftime('%Y-%m-%d %H:%M:%S') if self.last_updated else None,
             'update_count': self.update_count
         }
@@ -194,14 +194,14 @@ class DataHistory(db.Model):
     data_point_id = db.Column(db.Integer, db.ForeignKey('data_points.id', ondelete='CASCADE'), nullable=False, index=True)
     device_id = db.Column(db.Integer, db.ForeignKey('devices.id', ondelete='CASCADE'), nullable=False, index=True)
     channel_id = db.Column(db.Integer, db.ForeignKey('channels.id', ondelete='CASCADE'), nullable=False, index=True)
-    value = db.Column(db.Float, default=0.0)
+    value = db.Column(db.Numeric(20, 4), default=0.0)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def to_dict(self):
         return {
             'id': self.id,
             'data_point_id': self.data_point_id,
-            'value': self.value,
+            'value': float(self.value) if self.value is not None else 0.0,
             'timestamp': self.timestamp.strftime('%Y-%m-%d %H:%M:%S') if self.timestamp else None
         }
 

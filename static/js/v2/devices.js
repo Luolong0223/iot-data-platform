@@ -403,11 +403,6 @@
             '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
         }[c]));
     }
-    function formatNumber(v) {
-        if (typeof v !== 'number') return v;
-        if (Number.isInteger(v)) return v.toString();
-        return v.toFixed(3).replace(/\.?0+$/, '');
-    }
     function formatRelativeTime(date) {
         const diff = (new Date() - date) / 1000;
         if (diff < 5) return '刚刚';

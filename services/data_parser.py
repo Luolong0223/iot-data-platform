@@ -3,6 +3,7 @@ TCP 数据解析器 - 解析设备上报的 JSON 数据
 """
 import json
 import logging
+from decimal import Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ def parse_tcp_data(raw_data: str) -> dict:
     返回: {device_name, voltage, channels: [{name, online, data_points: [{name, value}]}]}
     """
     try:
-        msg = json.loads(raw_data)
+        msg = json.loads(raw_data, parse_float=Decimal)
     except json.JSONDecodeError as e:
         raise ParseError(f"JSON 解析失败: {e}")
 
@@ -41,7 +42,7 @@ def parse_tcp_data(raw_data: str) -> dict:
     if voltage is None:
         # 兼容旧格式 voltage_mv (毫伏)
         voltage_mv = device_info.get('voltage_mv', 0)
-        voltage = round(voltage_mv / 1000.0, 2) if voltage_mv else 0.0
+        voltage = round(float(voltage_mv) / 1000.0, 2) if voltage_mv else 0.0
     else:
         voltage = float(voltage)
 
@@ -65,11 +66,21 @@ def parse_tcp_data(raw_data: str) -> dict:
         for k, v in val.items():
             if k in ('name', 'online', 'data'):
                 continue
-            if isinstance(v, (int, float)):
+            if isinstance(v, (int, float, Decimal)):
                 data_dict[k] = v
 
-        data_points = [{'name': k, 'value': float(v) if v is not None else 0.0}
-                       for k, v in data_dict.items()]
+        data_points = []
+        for k, v in data_dict.items():
+            if v is None:
+                val_dp = Decimal('0')
+            elif isinstance(v, Decimal):
+                val_dp = v
+            else:
+                try:
+                    val_dp = Decimal(str(v))
+                except (InvalidOperation, ValueError):
+                    val_dp = Decimal('0')
+            data_points.append({'name': k, 'value': val_dp})
 
         channels.append({
             'name': ch_name,

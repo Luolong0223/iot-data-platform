@@ -13,6 +13,7 @@ import logging
 import threading
 import time
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask
 
@@ -121,7 +122,7 @@ def store_message_batch(app: Flask, messages: list) -> int:
                     voltage = device_info.get('voltage')
                     if voltage is None:
                         voltage_mv = device_info.get('voltage_mv', 0)
-                        voltage = round(voltage_mv / 1000.0, 2) if voltage_mv else 0.0
+                        voltage = round(float(voltage_mv) / 1000.0, 2) if voltage_mv else 0.0
                     else:
                         voltage = float(voltage)
 
@@ -179,7 +180,15 @@ def store_message_batch(app: Flask, messages: list) -> int:
 
                         # 数据点 upsert + 历史
                         for dp_name, dp_value in data_dict.items():
-                            val = float(dp_value) if dp_value is not None else 0.0
+                            if dp_value is None:
+                                val = Decimal('0')
+                            elif isinstance(dp_value, Decimal):
+                                val = dp_value
+                            else:
+                                try:
+                                    val = Decimal(str(dp_value))
+                                except (InvalidOperation, ValueError):
+                                    val = Decimal('0')
 
                             dp = DataPoint.query.filter_by(
                                 channel_id=channel.id, name=dp_name
@@ -242,7 +251,7 @@ def parse_message(raw_data: str) -> dict:
         return None
 
     try:
-        msg = json.loads(raw_data)
+        msg = json.loads(raw_data, parse_float=Decimal)
     except json.JSONDecodeError as e:
         logger.error(f"JSON parse failed: {e}, data={raw_data[:200]}")
         return None

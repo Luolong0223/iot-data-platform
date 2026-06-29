@@ -48,3 +48,15 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Database backups
+*.sql
+*.sql.gz
+
+# Secret key
+instance/.secret_key

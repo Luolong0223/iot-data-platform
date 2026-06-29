@@ -2,6 +2,7 @@ import json
 import logging
 import threading
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from models.database import db, User, Device, Channel, DataPoint, DataHistory, TcpLog
 from services.tcp_parser import parse_message
@@ -167,7 +168,7 @@ def store_data(user_id, parsed):
         voltage = device_info.get('voltage')
         if voltage is None:
             voltage_mv = device_info.get('voltage_mv', 0)
-            voltage = round(voltage_mv / 1000.0, 2) if voltage_mv else 0.0
+            voltage = round(float(voltage_mv) / 1000.0, 2) if voltage_mv else 0.0
         else:
             voltage = float(voltage)
         now = datetime.utcnow()
@@ -208,11 +209,22 @@ def store_data(user_id, parsed):
                 channel.is_online = ch_online
                 channel.last_seen = now
 
-            for dp_name, dp_value in ch_info['data_points'].items():
-                try:
-                    val = float(dp_value)
-                except (TypeError, ValueError):
-                    continue
+            data_points = ch_info['data_points']
+            if isinstance(data_points, dict):
+                dp_iter = data_points.items()
+            else:
+                dp_iter = [(dp['name'], dp['value']) for dp in data_points]
+
+            for dp_name, dp_value in dp_iter:
+                if dp_value is None:
+                    val = Decimal('0')
+                elif isinstance(dp_value, Decimal):
+                    val = dp_value
+                else:
+                    try:
+                        val = Decimal(str(dp_value))
+                    except (InvalidOperation, ValueError):
+                        val = Decimal('0')
 
                 dp = DataPoint.query.filter_by(
                     channel_id=channel.id, name=dp_name
@@ -222,7 +234,7 @@ def store_data(user_id, parsed):
                         channel_id=channel.id,
                         name=dp_name,
                         value=val,
-                        last_value=0.0,
+                        last_value=Decimal('0'),
                         last_updated=now,
                         update_count=1
                     )

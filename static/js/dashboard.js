@@ -428,11 +428,6 @@
     };
 
     // 辅助函数
-    function formatNumber(num, decimals) {
-        if (num === null || num === undefined) return '-';
-        return Number(num).toFixed(decimals || 2);
-    }
-
     function formatTime(timestamp) {
         if (!timestamp) return '-';
         const date = new Date(timestamp);
