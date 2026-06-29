@@ -75,14 +75,12 @@
         });
     };
 
-    // Format number - 统一版本：大数缩写 + 高精度 + 去尾零
+    // Format number - 统一版本：完整显示 + 高精度 + 去尾零
     window.formatNumber = function(num, decimals) {
         if (num === null || num === undefined) return '-';
         var n = Number(num);
         if (isNaN(n)) return String(num);
-        if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + 'M';
-        if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(2) + 'K';
-        var d = decimals !== undefined ? decimals : 4;
+        var d = decimals !== undefined ? decimals : 6;
         return n.toFixed(d).replace(/\.?0+$/, '');
     };
 
