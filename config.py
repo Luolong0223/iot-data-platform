@@ -38,7 +38,7 @@ class Config:
     
     # 数据库配置 - 优先读取 DATABASE_URL，否则尝试 MySQL，最后回退到 SQLite
     _db_url = os.environ.get('DATABASE_URL', '')
-    _mysql_password = os.environ.get('MYSQL_PASSWORD', '')
+    _mysql_password = os.environ.get('MYSQL_PASSWORD', 'cRwLGPScNejLEeBt')
     
     if not _db_url:
         if _mysql_password:
